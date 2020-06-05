@@ -1,0 +1,300 @@
+---
+title: "Visualization Lab 1"
+author: "CMSACamp 2020 Crew"
+date: "Week 1: Tuesday, June 3, 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: paper
+---
+
+Name: Thea Sukianto
+
+---
+
+
+# Into the fire with data visualization and R
+
+## Goals
+
+The two purposes of this lab are to 1) think about what should be included in visualizations and 2) use `R` to visualize categorical and discrete 1D data.
+
+## Preliminaries
+
+1.  Make sure you have the latest version of [Rstudio](https://www.rstudio.com/) and [R](https://www.r-project.org/) downloaded and working.  Please ask any of the instructors if you have any issues with this.
+
+2. Install the [tidyverse](https://www.tidyverse.org/) set of packages using the following commands in the Rstudio console.
+
+```{R, eval = FALSE}
+install.packages("tidyverse")
+```
+
+If prompted, select 'yes' if asked to download in your personal library.  If asked to select a mirror, any should suffice but usually the closest location will be the quickest.
+
+3.  Download [this lab]() and open it in Rstudio.
+
+
+## Lab Questions
+
+### Vive la France
+
+If COVID-19 pandemic wasn't here, this week was supposed to be the final week of the [2020 French Open](https://www.rolandgarros.com/en-us/), one of the four grand slams in tennis. Common tennis questions people ask are:
+
+1. Who is the GOAT (greatest of all time)?
+
+2. Should player $X$ play a base court game or approach the net?
+
+3. How important is holding serve?
+
+4. Is momentum a thing in tennis?
+
+**Question 1**.  Pick one of the above four questions. Describe, in words, some ideas of how you would answer this question. (E.g. I would look at who has the highest percentage of wins, taking into account the total number of games played to determine who is GOAT).
+
+
+**Answer 1**.  1. I would plot a time series of win rates for the players and find who (consistently) has the highest over time.
+
+
+**Question 2**.  The below picture is one of the the visualizations displayed on the [2019 French Open website](https://www.rolandgarros.com/en-us/matches/SM001) for the mens' final match (D.Theim vs R. Nadal).
+
+![](Figures/french-open-final-stats.png)
+
+  a. What sort of questions do you think the makers of this visualization wanted you to be able to answer?
+  
+  b. Do you think this is an effective visualization?
+  
+  c. Whom do you think is winning this match?  Why?
+  
+  d. Name two pros and cons of this visualization.
+  
+
+Answer the same questions on another visualization of the same match:
+  ![](Figures/french-open-final-match.png)
+
+
+
+**Answer 2**.  Write your answer here.
+ 
+ a. 
+ 
+ b. 
+ 
+ c. 
+ 
+ d. 
+ 
+**Question 3**.  You are perhaps wondering why we are starting with a fairly niche sport, however, it is a good introduction for a variety of reasons.
+
+1. Although the topic of this summer research program is sports, we want you to be able to connect the ideas learned here to **anything** dealing with data:  whether it be niche sports or astro-statistics.
+
+2. Tennis has a lot going on and a lot to visualize!
+
+    a. *Turn based play* (discrete data).  Discrete data can include winners, unforced errors.  Also seen in baseball, football, arguably basketball, and curling, for instance.
+  
+    b. *Continuous play* (continuous data).  Examples include service speed, length of points (in minutes), ball spin, and shot location.  Also seen in soccer, baseball, football, etc.
+  
+    c. *Influential points/'Weird' scoring*, e.g. the fact that winning a set 6-0 makes no difference in the final result than winning 7-6 (11-9) in a tiebreaker.  This makes us ask, are some points more important than others?  Also seen in football (where different players can result in different number of points), archery, and the decathlon.
+  
+    d. *Clustering*.  Which players are more similar to one another and why?  Are there features (latent or otherwise) of players than make them more or less similar to one another?
+  
+  **The question is** what sort of questions are you interested in exploring?  Give two examples.  They do not have to be about sports.
+
+**Answer 3**.  Write your answer here.
+
+
+## America's passtime: baseball
+
+### Barplots
+
+Ron Yurko, co-creator of the acclaimed [nflscrapR](https://www.rdocumentation.org/packages/nflscrapR/versions/1.8.3) package, has provided us with the following set of baseball data. Check out the description [here](https://github.com/ryurko/CMSACamp/tree/master/data/intro_r).
+
+We will now do some visualization of our own!  We first need to learn about the data. Run the following commands in Rstudio.
+
+```{R, warning = FALSE, message = FALSE}
+mlb <- read.csv("https://raw.githubusercontent.com/ryurko/CMSACamp/master/data/intro_r/mlb_teams_data.csv?token=ADLVDGC6U6R4BK725WSOENC472ECQ")
+str(mlb)
+```
+
+**Question 4**. 
+
+a. How many rows are in this data set?  How many columns?  (Hint:  Look at the help text for the command `?dim`.)
+
+
+
+b. What do you think the command `head()` does?  What does `tail()` do?  What does the number argument do?
+
+```{R, warning = FALSE, message = FALSE}
+head(mlb, 2)
+tail(mlb, 5)
+```
+
+c.  Let's do some plotting!  Don't worry too much about the commands now, just run them and see what happens!
+
+```{R, warning = FALSE, message = FALSE}
+library(tidyverse)
+ggplot(data = mlb, aes(x = final_rank)) + geom_bar()
+```
+Describe the above plot in words. How does it compare to the below command?
+
+```{R}
+tab <- mlb %>% select(final_rank, win_world_series) %>% table
+class(tab)
+as.data.frame(tab)
+```
+
+d.
+
+**Question 5**.  Let's look at our home team, the Pittsburgh Pirates.
+
+```{R, warning = FALSE, message = FALSE}
+pirates <- mlb %>% filter(team_id == "PIT")
+dim(pirates)
+
+ggplot(data = pirates, aes(x = final_rank)) + geom_bar()
+```
+
+a. Would you say the Pirates are a successful franchise?
+
+b. Maybe they were in the past.  Let us subset the data to look between the years 1960 and 1990?
+
+```{R, warning = FALSE, message = FALSE}
+pirates %>% filter(year >= 1960 & year <= 1990) %>% 
+  ggplot(aes(x = final_rank )) + geom_bar()
+```
+
+c. We can also look at percents rather than raw numbers.
+
+```{R, warning = FALSE, message = FALSE}
+pirates %>% filter(year >= 1990 & year <= 2010) %>% 
+  ggplot(aes(x = final_rank, y = ..count.. / sum(..count..) * 100)) + geom_bar() + ylab("Percentage (%)")
+```
+d.  Can you make a bar plot of percents of the final rank for the Pirates between 1991 and 2018?  How do the two compare?
+
+
+### Radial charts
+
+**Question 6**.  We can also use radial graphs to display 1D categorical data.  You are perhaps most familiar with pie charts.  Did you know that a pie chart can be made from a bar plot?
+
+```{R, warning = FALSE, message = FALSE}
+## Bar plot
+bar <- ggplot(data = mlb, aes(x =  factor(1), fill = factor(final_rank))) + geom_bar() +
+  scale_fill_discrete("Final rank") +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+bar
+
+## Transform to pie chart
+bar + coord_polar(theta = "y")  +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())
+
+```
+a.  Compare and contrast the two plots.  What is good (bad) about using the bar to compare category sizes?  How about for the pie chart?
+
+
+b. Make a rose diagram.  How does this plot compare to the pie chart?  The bar plot ?
+
+```{R, warning = FALSE, message = FALSE}
+ggplot(data = mlb, aes(x = factor(final_rank))) + geom_bar() + 
+  coord_polar() + xlab("")
+
+```
+
+c. Make this plot.
+
+```{R, warning = FALSE, message = FALSE}
+ggplot(data = mlb, aes(x = final_rank)) + geom_bar() + 
+  coord_polar(theta = "y")
+
+```
+
+Can you think of an instance where you would use such a plot?
+
+d.  Consider the below quote.  What do you think of radial charts?  
+
+> "Death to pie charts" - Bill Eddy
+
+### Making graphs you *want* to look at
+
+You may think the above graphs are "ugly."  You may be correct.  As statisticians and data scientists, our main focus should be presenting the data, i.e. substance over "flash."  That said, bad aesthetics (e.g. titles, text size, data ink, background lines, colors, gradient, stripes, etc.) choices can certainly hinder the presentation of data and good aesthetic choices can help.
+
+**Question 8.**
+
+a.  Describe three ways good aesthetic choices can help increase one's comprehension of a plot.
+
+b.  Describe two ways bad aesthetic choices can make a plot incomprehensible.
+
+At the very minimum, all your visualizations should contain the following features:
+
+  1. A meaningful title
+
+  2. Meaningful axis titles and legend titles
+
+  3. One or two clear concepts (as opposed to trying to show everything about your data in one plot **or** being very repetitive in the features shown)
+
+  4. Consideration for `data ink` (the concept that if something does not meaningfully contribute to a figure, is it really necessary?)
+
+c.  Let's fix some of our above plots by first adding better labels.
+
+```{R, warning = FALSE, message = FALSE}
+g <- ggplot(data = pirates, aes(x = final_rank)) + geom_bar() +
+  labs(x = "Final rank at end of season",
+       y = "Frequency",
+       title = "Final rank of MLB teams",
+       subtitle = "1871 - 2018")
+g
+       
+```
+
+
+d. We can also better distinguish between the ranks if we choose different colors.
+
+```{R, warning = FALSE, message = FALSE}
+g <- ggplot(data = pirates, aes(x = factor(final_rank), fill = factor(final_rank))) + geom_bar() +
+  labs(x = "Final rank at end of season",
+       y = "Frequency",
+       title = "Final rank of MLB teams",
+       subtitle = "1871 - 2018")
+g + scale_fill_brewer(type = "qual", guide = FALSE)
+
+```
+
+e. It may make more sense to view the rankings as sequential values (order matters).
+
+```{R, warning = FALSE, message = FALSE}
+g <- ggplot(data = pirates, aes(x = factor(final_rank), fill = factor(final_rank),
+                                col = final_rank)) + geom_bar() +
+  labs(x = "Final rank at end of season",
+       y = "Frequency",
+       title = "Final rank of MLB teams",
+       subtitle = "1871 - 2018")
+g + scale_fill_brewer(type = "seq", guide = FALSE)
+
+```
+
+We will keep learning about colors over the next few weeks!  
+
+
+### Next time
+
+- Chi square test visualizations
+
+- 2D data
+
+
+## Bonus exercises.
+
+Where the bonus is your self-enlightenment.
+
+1.  Repeat the above exercises with your favorite team instead of the Pittsburgh Pirates.  Or failing that, the New York Yankees.
+
+
+2.  Add meaningful titles and axes labels to the graphs you made in this lab.
+
+3. Change the colors in the radial graphs.
+
+
+
+

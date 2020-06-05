@@ -1,0 +1,232 @@
+---
+title: "Data wrangling with dplyr"
+author: "CMSACamp 2020"
+date: "June 02, 2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Data frame
+
+Our data are usually presented as a csv file and after loading a csv file into the R studio, we will achieve a data frame. A data frame can be considered a special case of matrix where each column usually represent a variable and all variables have exactly the same length. 
+
+```{r}
+nba <- read.csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/intro_r/nba_2020_player_stats.csv")
+nba_tibble <- dplyr::as_tibble(nba)
+# Alt-Shift-K: keyboard shortcuts
+# Alt-Dash: insert assignment arrow
+```
+
+We can use the functions head() and tail() to view a sample of the data frame. Examples are viewing the first six rows of the data frame "nba" and the last three rows. 
+
+```{r}
+head(nba)
+tail(nba, 3)
+```
+
+To view the dimentions of the data frame, use the function dim()
+
+```{r}
+dim(nba)
+```
+
+Tow view the summary statistics for all variables and the data structure types, use summary() and str().
+
+```{r}
+summary(nba)
+str(nba)
+```
+
+## Data manipulation with package "dplyr"
+
+An easier way to manipulate the data frame is through the package "dplyr", which is included in the package "tidyverse". The operation we can do includes: selecting specific columns, filtering for rows, re-ordering rows, adding new columns and summarizing data.  "Split-apply-combine" concept can also be achieved by "dplyr". Before we use the package, remember to call it:
+
+```{r, message=FALSE}
+library(tidyverse)
+```
+
+### Selecting columns using select()
+
+The function select() can be use to select certain column with the column names. The first parameter is the name of the data frame. For example, if I only need to view the column "player" and "games":
+
+```{r}
+nba_pg <- select(nba, player, games)
+head(nba_pg)
+```
+
+To select all the columns except a specific column, use the `-` (subtraction) operator. For example,
+
+```{r}
+head(select(nba, -player))
+```
+
+To select a range of columns by name, use the `:` (colon) operator. For example,
+
+```{r}
+head(select(nba, player:games))
+```
+
+To select all columns that start with certain character strings, use the function starts_with(). Ohter matching options are: 
+
+1. ends_with() = Select columns that end with a character string
+
+2. contains() = Select columns that contain a character string
+
+3. matches() = Select columns that match a regular expression
+
+4. one_of() = Select columns names that are from a group of names
+
+```{r}
+head(select(nba, starts_with("three")))
+head(select(nba, contains("throw")))
+```
+
+### Selecting rows using filter()
+We can also select the rows that satisfied certain criteria. For example, if I want to select the rows that the number of assists is larger than 500.
+
+```{r}
+filter(nba, assists > 500)
+```
+
+We can also filter mutiple criteria.
+
+```{r}
+filter(nba, age > 30, team %in% c("HOU", "GSW"))
+```
+
+### Pipe operator: %>%
+
+Before we go any futher, let's introduce the pipe operator: `%>%`. This operator allows you to pipe the output from one function to the input of another function. For example, the following two statements will generate the same output:
+
+```{r}
+head(select(nba, player, games))
+
+nba %>% select(player, games) %>% head
+```
+
+The reason why we introduce the pipe operator is to easily combine multiple functions without using too many parentheses or name the variables in each step. 
+
+### Arrange or re-order rows using arrange()
+To arrange the data frame by a specific order we need to use the function arrange(). The default is by increasing order and a negaive operator will provide the decreasing order. 
+
+```{r}
+head(arrange(nba, personal_fouls))
+head(arrange(nba, -personal_fouls))
+```
+
+It can also combine with the select() and filter(), with the pipe operator. 
+
+```{r}
+nba %>% select(player, team, age, games) %>% arrange(-age) %>% filter(games > 50) %>% head
+```
+
+### Create new columns using mutate()
+Sometimes the data does not provide the variable that we are interested in directly and in that case, we can manipulate the current variables and add new variables into the data frame. For example, if I am interested in number of fouls per game,
+
+```{r}
+nba %>% mutate(foul_per_game = personal_fouls / games) %>% head
+```
+
+### Create summaries of the data frame using summarise()
+
+TO create summary statistics for a given column in the data frame, we can use summarise() function. For example, if I need to extract the mean, min, max number of assists,
+
+```{r}
+nba %>% summarise(avg_assist = mean(assists), 
+                  min_assist = min(assists),
+                  max_assist = max(assists))
+```
+
+The advantage of summarise is more obvious if we combine it with the group_by() , the group operators. Since players at the different position tend to have very different statistics, we can group the players by their poisition first and then generate summary statistics. For example, 
+
+```{r}
+nba %>% group_by(position) %>% summarise(avg_assist = mean(assists), 
+                                          min_assist = min(assists),
+                                          max_assist = max(assists))
+```
+
+## Exercise
+
+1. Read the MLB data frame and show the first 2 row and the last 4 row. 
+
+```{r}
+#R code here
+mlb <- dplyr::as_tibble(read.csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/intro_r/mlb_teams_data.csv"))
+print(head(mlb, 2))
+print(tail(mlb, 4))
+# location of the dataset: http://www.stat.cmu.edu/cmsac/sure/materials/data/intro_r/mlb_teams_data.csv
+```
+
+2. Find out the dimension of MLB data frame. Discuss the difference between summary() and str()
+
+```{r}
+dim(mlb)
+```
+`summary()` shows the summary statistics for each column in the data frame while `str()` shows the data type of each column and its first few observations.
+
+3. Select all the columns related to the game results in MLB data frame. 
+
+```{r}
+mlb %>% select(c(wins, losses))
+```
+
+4. Select the columns end with the string "allowed" and show the head.
+
+```{r}
+mlb %>% select(ends_with("allowed")) %>% head()
+```
+
+5.(option) Compare following statements and discuss the difference. Hint: read the help document of "regex". 
+
+```{r, eval=FALSE}
+head(select(mlb, contains("runs")))
+head(select(mlb, matches("runs")))
+
+head(select(mlb, contains("runs.*")))
+head(select(mlb, matches("runs.*")))
+```
+`contains()` returns the column names that literally contain the parameter string. `matches()` is able to take wildcards (.*). That's why `contains()` returns nothing when passed a string with a wildcard while `matches()` returned 6 rows.
+
+6. Select the rows that wins more than 100 times in year 2018.
+
+```{r}
+mlb %>% filter(year == 2018, wins > 100)
+```
+
+7. Use the pipe operator to select the teams that win world series after(include) year 2010. Only present the year, the team name and the number of wins.
+
+```{r}
+mlb %>% filter(year >= 2010, win_world_series == "Y") %>% select(c(year, team_name, wins))
+```
+
+8. Use the pipe operator to select the teams that win world series after(include) year 2010. Only present the year, the team name and the number of wins. Re-arrange the data frame with the number of wins in a decreasing order. 
+
+```{r}
+mlb %>% filter(year >= 2010, win_world_series == "Y") %>% select(c(year, team_name, wins)) %>% arrange(desc(wins))
+```
+
+9. Use the pipe operator to add two new columns in the MLB data frame which represents the percentage of wins over the numebr of games_played and the number of homeruns per games_played. 
+
+```{r}
+mlb %>% mutate(p_wins = wins/games_played,
+               p_hr = homeruns/games_played)
+```
+
+10. Use the pipe operator and group operator to generate summary statistics (mean, min, max) for the the final rank, for each team.
+
+```{r}
+mlb %>% group_by(team_name) %>% 
+  summarise(mean_final_rank = mean(final_rank),
+            min_final_rank = min(final_rank),
+            max_final_rank = max(final_rank)) %>% 
+  ungroup()
+```
+
+11. Explore the missing values. In MLB data frame, which columns contain mising value "NA"? Is there any pattern for the missing value?
+
+```{r}
+mlb %>% filter(anyNA(c(league, win_world_series, hit_by_pitch, sacrifice_flies))) %>% 
+  filter(is.na(hit_by_pitch), !is.na(sacrifice_flies))
+```
+If there is no win_world_series, then league must also be blank. Likewise, if hit_by_pitch is blank, then so is sacrifice_flies.

@@ -1,0 +1,449 @@
+---
+title: "EDA Demo: Sabermetrics"
+output: html_notebook
+---
+
+```{r echo=FALSE}
+library(tidyverse)
+library(Lahman)
+library(gt)
+library(vcd)
+Batting <- as_tibble(Batting)
+```
+A tibble is the tidyverse version of a data frame and contains additional features.
+
+as_tibble() is preferred over as.tibble() (deprecated).
+
+```{r}
+dim(Batting)
+```
+
+```{r}
+class(Batting)
+```
+
+```{r}
+head(Batting)
+```
+
+```{r}
+table(Batting$lgID)
+```
+## dplyr verbs
+### filter
+```{r}
+mlb_batting <- filter(Batting, lgID %in% c("AL", "NL"))
+# filter(Batting, (lgID == "AL") | (lgID == "NL"))
+nrow(Batting) - nrow(mlb_batting)
+```
+### select
+```{r}
+sel_batting <- select(Batting, yearID, lgID, G, AB, H, BB, SO)
+head(sel_batting, n = 3)
+```
+### arrange
+```{r}
+hr_batting <- arrange(Batting, desc(HR))
+head(hr_batting)
+```
+
+### summarize
+```{r}
+summarize(Batting, max(stint), median(HR))
+filter(Batting, stint == 5)
+```
+
+### mutate
+```{r}
+new_batting <- mutate(Batting, batting_avg = H / AB, so_to_bb = SO / BB)
+select(new_batting, batting_avg, so_to_bb)
+# this is annoying...
+head(arrange(select(mutate(Batting, BA = H / AB), playerID, BA), desc(BA)), n = 3)
+```
+
+### pipe
+```{r}
+Batting %>% 
+  filter(lgID %in% c("AL", "NL"),
+         AB > 300) %>% 
+  mutate(batting_avg = H / AB) %>% 
+  arrange(desc(batting_avg)) %>% 
+  select(playerID, yearID, batting_avg) %>% 
+  slice(c(1, 2, 10, 100))
+```
+### group_by
+```{r}
+Batting %>% 
+  filter(lgID %in% c("AL", "NL")) %>% 
+  group_by(yearID) %>% 
+  summarize(hr = sum(HR), so = sum(SO), bb = sum(BB)) %>% 
+  arrange(desc(so)) %>% 
+  slice(1:5)
+```
+```{r}
+Batting %>% 
+  filter(lgID %in% c("AL", "NL")) %>% 
+  group_by(playerID) %>% 
+  mutate(h_prop = H / sum(H, na.rm = TRUE)) %>% 
+  arrange(desc(stint)) %>% 
+  dplyr::select(playerID, stint, h_prop, H) %>% 
+  ungroup()
+```
+### summarize_at
+```{r}
+year_batting_summary <- Batting %>% 
+  filter(lgID %in% c("AL", "NL")) %>% 
+  group_by(yearID) %>% 
+  summarize_at(vars(H, HR, SO, BB, AB),
+               sum, na.rm = TRUE) %>% 
+  mutate(batting_avg = H / AB)
+year_batting_summary
+```
+
+## More examples
+
+When were the top 3 batting averages?
+```{r}
+year_batting_summary %>% 
+  arrange(desc(batting_avg)) %>% 
+  slice(1:3)
+```
+
+What is the strike out to walk ratio?
+```{r}
+year_batting_summary %>% 
+  mutate(so_to_bb = SO / BB) %>% 
+  arrange(so_to_bb) %>% 
+  slice(c(1, n()))
+```
+What were the batting averages in 1876 and 2018?
+```{r}
+year_batting_summary %>% 
+  select(yearID, batting_avg) %>% 
+  rename(Year = yearID,
+         `Batting AVG` = batting_avg) %>% 
+  slice(c(1, n()))
+```
+
+```{r}
+year_batting_summary %>% 
+  select(yearID, batting_avg) %>% 
+  rename(Year = yearID,
+         `Batting AVG` = batting_avg) %>% 
+  arrange(desc(`Batting AVG`)) %>% 
+  slice(c(1:3, (n()-2):n())) %>% 
+  gt() %>% 
+  tab_header(
+    title = "Best/worst MLB Seasons by AVG",
+    subtitle = "Top/bottom three are presented"
+  )
+```
+##ggplot2
+
+```{r}
+year_batting_summary %>% 
+  ggplot(aes(x = yearID, y = HR)) +
+  geom_point(aes(color = SO, size = BB)) +
+  geom_line(color = "darkred",
+            linetype = "dashed") +
+  scale_color_gradient(low = "darkblue",
+                       high = "darkorange") +
+  labs(x = "Year", y = "Homeruns",
+       color = "Strikeouts",
+       size = "Walks",
+       title = "The rise of MLB's three true outcomes",
+       caption = "Data courtesy of Lahman") +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        plot.title = element_text(size = 15),
+        axis.title = element_text(size = 10))
+  # coord_cartesian() + (implicit)
+  # scale_x_continuous() + (implicit)
+  # scale_y_continuous() + (implicit)
+  # scale_y_continuous(breaks = seq(0, 6000, by = 1000)) +
+  # scale_x_reverse() +
+  # scale_y_log10() +
+  # geom_smooth() (smoothing regression)
+```
+
+### pivot the data
+
+pivot_longer - gathers information spread out across variables, increase nrow() but decrease ncol()
+
+pivot_wider - spreads information out from observations, decrease nrow() but increase ncol()
+
+```{r}
+year_batting_summary %>% 
+  select(yearID, HR, SO, BB) %>% 
+  rename(HRs = HR, Strikeouts = SO, Walks = BB) %>% 
+  pivot_longer(HRs:Walks,
+               names_to = "stat",
+               values_to = "value") %>% 
+  ggplot(aes(x = yearID, y = value)) +
+  geom_line(color = "darkblue") +
+  geom_point(color = "darkblue") +
+  facet_wrap(~ stat, scales = "free_y", ncol = 1) +
+  labs(x = "Year", y = "Total of statistic",
+       title = "The rise of MLB's three true outcomes",
+       caption = "Data courtesy of Lahman") +
+  theme_bw() +
+  theme(strip.background = element_blank())
+```
+
+### univariate data
+
+#### 1D discrete
+
+This is the empirical distribution of batted ball types from all hypothetical Mike Trout 2019 seasons.
+
+Generate a point estimate of each batted ball type proportion and show the standard error. (Important to show uncertainty)
+
+```{r}
+trout_batted_balls <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/xy_examples/trout_2019_batted_balls.csv")
+head(trout_batted_balls)
+
+# Frequency histogram
+trout_batted_balls %>% 
+  ggplot(aes(x = batted_ball_type)) +
+  geom_bar(aes(y = ..count.. / sum(..count..))) +
+  theme_bw()
+
+# Relative frequency histogram
+trout_batted_balls %>% 
+  group_by(batted_ball_type) %>% 
+  summarize(count = n()) %>% 
+  ungroup() %>% 
+  mutate(total = sum(count),
+         prop = count / total,
+         se = sqrt(prop * (1-prop) / total),
+         lower = prop - 2 * se,
+         upper = prop + 2 * se,
+         batted_ball_type = fct_reorder(batted_ball_type, prop)) %>% 
+  ggplot(aes(x = batted_ball_type)) +
+  geom_bar(aes(y = prop),
+           stat = "identity") +
+  geom_errorbar(aes(ymin = lower,
+                    ymax = upper),
+                color = "red") +
+  xlab("Batted Ball Type") +
+  ylab("Proportion") +
+  theme_bw()
+```
+
+However, we already know the population of Mike Trout's batted balls and a CI is not necessary, so use caution.
+
+### 1D continuous
+
+For continuous variables, we're interested in the shape, center, and spread of the distribution.
+
+```{r}
+# Boxplot
+trout_batted_balls %>% 
+  ggplot(aes(y = exit_velocity)) +
+  geom_boxplot(aes(x = "")) +
+  theme_bw() +
+  coord_flip() +
+  theme(axis.title.y = element_blank(),
+        axis.ticks.y = element_blank())
+```
+
+Pros: displays outliers, percentiles, spread, skew
+Cons: can't tell how many modes
+
+```{r}
+# Histogram
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity)) +
+  geom_histogram(bins = 100) +
+  theme_bw()
+```
+
+Still a summary.
+
+```{r}
+library(ggbeeswarm)
+# Beeswarm plot (jittered dotplot)
+trout_batted_balls %>% 
+  ggplot(aes(y = exit_velocity)) +
+  geom_beeswarm(aes(x = ""),
+                cex = 3) +
+  theme_bw() +
+  coord_flip()
+```
+
+Shows all data points (good for small datasets).
+
+```{r}
+# Violin plot
+trout_batted_balls %>% 
+  ggplot(aes(x = "", y = exit_velocity)) +
+  geom_violin() +
+  geom_beeswarm(cex = 3) +
+  geom_boxplot(width = 0.2,
+               alpha = .6) + 
+  theme_bw() +
+  coord_flip()
+```
+
+Violin plots are nice because you can also see the distribution shape.
+
+```{r}
+# Empirical (sample) CDF
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity)) +
+  stat_ecdf() +
+  theme_bw()
+```
+
+Pros: ECDF displays all information in data (except for order), converges in distribution, easy to interpret
+Cons: Not very popular
+
+```{r}
+# Rug plot + histogram
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity)) +
+  geom_histogram() +
+  geom_rug(alpha = 0.3) +
+  theme_bw()
+
+# Rug + scatterplot
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity,
+             y = launch_angle)) +
+  geom_point() +
+  geom_rug(alpha = 0.3) +
+  theme_bw()
+```
+
+Useful when added to other visualizations, e.g. ECDF
+
+### bivariate data
+
+#### 2D categorical
+
+```{r}
+trout_batted_balls <- trout_batted_balls %>% 
+  filter(pitch_type != "null") %>% 
+  mutate(pitch_type = fct_recode(pitch_type,
+                                 "Changeup" = "CH",
+                                 "Breaking ball" = "CU",
+                                 "Fastball" = "FF",
+                                 "Fastball" = "FC",
+                                 "Fastball" = "FS",
+                                 "Fastball" = "FT",
+                                 "Breaking ball" = "KC",
+                                 "Fastball" = "SI",
+                                 "Breaking ball" = "SL"
+                                 ))
+```
+
+```{r}
+trout_batted_balls %>% 
+  ggplot(aes(x = batted_ball_type,
+             fill = pitch_type)) +
+  geom_bar(position = "dodge") +
+  theme_bw()
+```
+
+Stacked bar charts emphasize the marginal distribution.
+
+Side-by-side bar charts emphasize the conditional distribution.
+
+```{r}
+# contingency table - frequency
+trout_batted_balls %>% 
+  group_by(batted_ball_type, pitch_type) %>% 
+  summarize(joint_freq = n()) %>% 
+  pivot_wider(names_from = batted_ball_type,
+              value_from = joint_freq)
+
+# contingency table - probability
+trout_batted_balls %>% 
+  group_by(batted_ball_type, pitch_type) %>% 
+  summarize(joint_prob = n() / nrow(trout_batted_balls)) %>% 
+  pivot_wider(names_from = batted_ball_type,
+              values_from = joint_prob) %>% 
+  gt()
+
+```
+
+Marginal distribution - row/column sums
+Conditional distribution - individual cell/marginal 
+Two variables X, Y are independent iff P(x)P(y) = P(x, y).
+
+```{r}
+# visualizing independence
+mosaic(~ pitch_type + batted_ball_type,
+       data = trout_batted_balls)
+```
+
+Spine chart of spine charts
+height = marginal distribution of pitch_type
+width = conditional distribution of batted_ball_type | pitch_type
+area = joint distribution
+
+```{r}
+# side-by-side violins
+trout_batted_balls %>% 
+  ggplot(aes(x = pitch_type,
+             y = exit_velocity)) +
+  geom_violin() +
+  geom_boxplot(width = .4) +
+  theme_bw()
+```
+
+```{r}
+# ecdf
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity,
+             color = pitch_type)) +
+  stat_ecdf() +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+# stacked histogram
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity,
+             fill = pitch_type)) +
+  geom_histogram() + 
+  theme_bw() + 
+  theme(legend.position = "bottom")
+```
+
+```{r}
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity,
+             color = pitch_type)) +
+  geom_freqpoly() +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity)) + 
+  geom_histogram() +
+  theme_bw() +
+  facet_wrap(~ pitch_type, ncol = 2)
+```
+
+```{r}
+trout_batted_balls %>% 
+  ggplot(aes(x = exit_velocity)) + 
+  geom_histogram() +
+  theme_bw() +
+  facet_grid(pitch_type ~., margins = TRUE)
+```
+
+### multivariable data
+```{r}
+trout_batted_balls %>% 
+  ggplot(aes(x = pitch_type,
+             fill = batted_ball_type)) +
+  geom_bar() +
+  theme_bw() +
+  facet_wrap(~ outcome, ncol = 5) + 
+  theme(legend.position = "bottom")
+```

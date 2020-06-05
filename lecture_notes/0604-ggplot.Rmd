@@ -1,0 +1,310 @@
+---
+title: "Visualization Lab 2"
+author: "Sports Camp Crew"
+date: "June 04, 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: paper
+---
+
+```{R, show = FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+```
+
+# Getting familiar with ``ggplot``
+
+## Basics
+
+Perhaps the primary component of the `tidyverse`, `ggplot2` consists of a powerful set of functions used to make useful, interesting, and aesthetically pleasing figures or graphs in a **standard** and **uniform manner**.  There are many, many great resources for learning ggplot2 and the philosophy behind it (e.g. the "Grammar of Graphics").
+
+Broadly, the idea behind ``ggplot2` is that different features of plotting form a language where the features have structure and rules associated with them (i.e. a grammar).  The most important part of any `ggplot` is not the plot type you are trying to make (e.g. scatter plot, histogram, dendrogram, barplot, etc.), but the data itself.
+
+Load in the `tidyverse` package and read in the MLB data.
+
+```{R, warning = FALSE, message = FALSE }
+library(tidyverse)
+mlb <- read.csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/intro_r/mlb_teams_data.csv")
+```
+
+
+## Initializing a plot
+
+More importantly, the data in any `ggplot` is assumed to be a `data.frame` which is a data structure fairly unique to `R`.  You don't have to know a lot about the intricacies of these structures, but just know there are a lot of details just under the surface!
+
+1. Initialize a plot
+
+```{R, warning = FALSE, message = FALSE }
+ggplot()
+```
+
+**Congratulations**, you have made an empty plot!  In wonky metaphor land, we may say this is the medium on which we are writing our sentences that will become amazing visualizations.
+
+2. Save the plot for later and enter the data.
+
+```{R, warning = FALSE, message = FALSE }
+g <- ggplot(data = mlb)
+```
+
+Note that the above shows nothing, not even an empty plot.  That is because we have stored the plot itself as a variable!  This is a useful feature because we can save partial plots and add to them dynamically.
+
+3.  Change the data.  We have now changed the data to the below:
+
+```{R, warning = FALSE, message = FALSE}
+x <- seq(1, 10, by = 2)
+df <- data.frame(x = x, y = 2 * x, z = letters[x],
+                 group = rep(c(1,2), length.out = length(x)))
+```
+
+**Question 1.** Can you describe, in words, what each of the columns of our new data frame `df`
+
+```{R, warning = FALSE, message = FALSE }
+g2 <- ggplot(data = df) 
+```
+
+x - odd numbers from 1 to 9
+y - 2 * x
+z - letter of the alphabet corresponding to x
+group - assigning a label 1 or 2 for every other row
+
+4.  The columns in a `data.frame` are very important for ggplot.  We **map** columns of a data frame to different **aesthetics**, which is abbreviated as `aes()` (and is itself a function) in `ggplot2`.  For example, we commonly talk about plotting "y vs. x."  We can do this directly.
+
+```{R, warning = FALSE, message = FALSE }
+g <- ggplot(data = mlb, aes(x = year, y = strikeouts))
+g
+```
+
+Note that the above plot has assigned the "year" column to the x-axis and "strikesout" to the y-axis.  Also note that the plot does not contain any points.  This is because we have not told the plot how to handle the data, we only labeled what it is.
+
+**Question 2**
+
+5. Set up an empty plot so that instead of strikeouts and year we look at hits (y-axis) vs. sacrifice flies (x-axis).  You can use the `colnames()` function to find the column names that you need.  We put in some code to get you started.
+
+```{R, warning = FALSE, message = FALSE }
+## R code here
+g3 <- ggplot(mlb, aes(x = sacrifice_flies, y = hits))
+g3
+```
+
+6. Finally, we are ready to add to make our data visible.  Fortunately, `ggplot2` contains a plethora of ready-made functions.
+
+```{R, warning = FALSE, message = FALSE }
+g2 <- ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_point()
+g2
+```
+
+**Question 3**.  Make a scatter plot for `g3` which is hits vs. sacrifice flies.
+
+```{R, warning = FALSE, message = FALSE }
+g3 <- ggplot(data = mlb, aes(x = homeruns, y = wins)) + geom_point()
+g3
+```
+
+
+7.  The beauty of `ggplot` comes from the following: we can make a lot of different plots just by changing one word.  The `geom_*` family is special and the suffix `*` will tell `ggplot2` what to do with our data (provided we have assigned it correctly with `aes()`).
+
+```{R, warning = FALSE, message = FALSE }
+## Connecting lines
+ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_line()
+
+## A smooth line
+ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_smooth()
+
+## A rug plot (shows density of observations)
+ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_rug()
+
+## All together
+ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_point() + geom_line() + geom_smooth() + geom_rug()
+```
+
+A subtle point here is that each addition is a layer that is put *on top* of the previous layer.  This note can really help you put the finishing touches on graphs.
+
+**Question 4**.  Try out at least two of the `geom_*` functions on the data for hits vs. sacrifice flies.  Try exploring with some more `geom_*` functions [here](https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf).  Are there any that cause an error?
+
+```{R, warning = FALSE, message = FALSE }
+## R code here
+mlb %>% ggplot(aes(sacrifice_flies, hits)) +
+  geom_bin2d()
+
+mlb %>% ggplot(aes(sacrifice_flies, hits)) +
+  geom_density2d()
+```
+
+## Presentation
+
+The package ``ggplot2`` does a lot of the heavy lifting when it comes to make interesting plots, given we have the data in the proper structure.  However, it just as important that our plots are **readable**.  Many people (maybe your future boss and definitely your current TAs) like to be able to view figures and graphs as objects that can stand on their own.  This means that we should not have to look elsewhere in the text to understand the **main** ideas your plot is trying to convey.  At a bare minimum this means any plot should have
+
+1. A meaningful title
+
+2. Meaningful axis titles and legend titles
+
+3. One or two clear concepts (as opposed to trying to show everything about your data in one plot **or** being very repetitive in the features shown)
+
+4. Consideration for `data ink` (the concept that if something does not meaningfully contribute to a figure, is it really necessary?)
+
+
+**Question 5**. Consider the plot shown below.  What can you say about this plot with regards to the 4 criteria listed above?
+
+```{R, warning = FALSE, message = FALSE }
+## All together
+ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_point() + geom_line() + geom_smooth() + geom_rug()
+```
+
+```
+The plot is way too crowded and it's unclear which concepts are trying to be shown in the data (violates condition 3). The axis labels are clear, but there is no title (violates 1). Furthermore, since too many concepts are trying to be conveyed here, it also violates 4.
+
+```
+
+Again, fortunately for us, `ggplot` gives us some functions to help with the above.  We also have to use our good judgment.  "Make good decisions" - Anonymous. 
+
+Specifically, we will make use of the `labs()` function and the `theme_*()` functions.  The second will especially become more important as we progress this summer. 
+
+We will also show how we can build the plot dynamically.
+
+```{R, warning = FALSE, message = FALSE}
+g <- ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_point()
+g + labs(x = "Year", y = "Strikeouts", 
+         title = "Strikeouts vs. Year",
+         subtitle = "Major League Baseball") +
+  theme_bw()
+```
+
+**Question 6**.  Create a scatterplot of hits vs. sacrifice flies with better respect to the 4 criteria listed above.  Also add a smooth trend line to the plot.
+
+```{R, warning = FALSE, message = FALSE}
+mlb %>% ggplot(aes(sacrifice_flies, hits)) +
+  geom_point() +
+  geom_smooth() +
+  xlab("Sacrifice Flies") +
+  ylab("Hits") + 
+  ggtitle("Sacrifice Flies vs. Hits, 1871 - 2018") +
+  theme_bw()
+```
+
+
+
+## Life in color
+
+`ggplot2` does about 80% of the heavy lifting for you when it comes to making informative and professional visualizations.  The other 20% can be a total pain and the bane of your existence.  We will try to minimize this struggle.
+
+We will first look at the struggle through the lens of colors.
+
+**Question 7**.
+
+The first point we will cover is attributes within `aes()` and those outside `aes`.  Compare these two graphs where we change the color of the points.
+
+```{R, warning = FALSE, message = FALSE}
+ggplot(data = mlb, aes(x = year, y = strikeouts, col = 2)) + geom_point()
+
+ggplot(data = mlb, aes(x = year, y = strikeouts)) + geom_point(col = 2)
+
+```
+
+In the first plot, `col` is in `aes()`.  It first looks for the `2` column from your data, `mlb`.  It fails to find such a column.  It then decides to map the the numeric `2` to every row in the data as the color.  Since `2` is numeric (as opposed to a factor), ``ggplot2` gives you an entire color bar that only has one color.  Try putting `factor(2)` instead of `2` in the first plot.
+
+In the second plot, `col` is outside `aes()` and 2 is the numeric equivalent for red in `R`.  Try putting another number in.  Try putting `"red"` in.  Then try `"cornflowerblue"`.  Find your favorite color and try it out [here](http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf).  Notice that the arguments outside of `aes()` don't put a legend in your plot.
+
+**Question 8**.  Let us color the points by whether the team won the World Series or not.
+
+```{R, warning = FALSE, message = FALSE}
+ggplot(data = mlb, aes(x = year, y = strikeouts, col = win_world_series)) + geom_point()
+```
+
+A prime example of the 80/20 rule.  The "Y" points are difficult to see.  That is because the plotting order of the points is NA, Y, and then N.  They are also plotted from left to right!  We would rather have NA, Y, N.  We have to manipulate the data.frame to change this.  If we really want the World Series Winner to be visible, we have to do something "hacky" (as far as your TA knows anyway).
+
+
+```{R, warning = FALSE, message = FALSE}
+
+mlb$strikeouts2 <- mlb$strikeouts ## Make a copy of strikeouts
+mlb$strikeouts2 <- ifelse(as.character(mlb$win_world_series) == "Y", mlb$strikeouts2, NA) # Only keep winners
+
+```
+
+```{R, warning = FALSE, message = FALSE}
+ggplot(data = mlb, aes(x = year, col = win_world_series)) + geom_point(aes(y = strikeouts))  +
+  geom_point(aes(y = strikeouts2))
+```
+
+The points are now on top.  It looks better, don't you think?  Don't be afraid to manipulate your data, but try to always make new copies. Can you put the all the "Y"s on top?
+
+```{R}
+ggplot(data = mlb, aes(x = year, col = win_world_series, shape = as.factor(final_rank))) + geom_point(aes(y = strikeouts))  +
+  geom_point(aes(y = strikeouts2))
+```
+
+**Question 9**.
+
+The next step is the legend.  We will put a better title on it while changing the colors and changing the label names.  We will also put our title and axes titles in and change the theme.
+
+```{R, warning = FALSE, message = FALSE}
+g <- ggplot(data = mlb, aes(x = year, col = win_world_series)) + geom_point(aes(y = strikeouts))  +
+  geom_point(aes(y = strikeouts2)) +
+  scale_color_manual(name = "Win World Series?", 
+                     values = c("antiquewhite3", "darkgoldenrod"),
+                     na.value = "gray40",
+                     labels = c("No", "Yes", "N/A")) +
+  labs(x = "Year", y = "Strikeouts",
+       title = "Strikeouts vs. Year",
+       subtitle = "MLB") + theme_bw()
+g
+```
+
+This is pretty good and about 95% of the way there.  Unfortunately, if you are putting this figure in a presentation or a paper, the default text size is way too small.  It always best to assume that people can't see well and work from there.
+
+So we get to mess with the [theme](https://ggplot2.tidyverse.org/reference/ggtheme.html).
+
+
+```{R, warning = FALSE, message = FALSE}
+g <- ggplot(data = mlb, aes(x = year, col = win_world_series)) + geom_point(aes(y = strikeouts))  +
+  geom_point(aes(y = strikeouts2)) +
+  scale_color_manual(name = "Win World Series?", 
+                     values = c("antiquewhite3", "darkgoldenrod"),
+                     na.value = "gray40",
+                     labels = c("No", "Yes", "N/A")) +
+  labs(x = "Year", y = "Strikeouts",
+       title = "Strikeouts vs. Year",
+       subtitle = "MLB") +
+  theme_bw() +
+  theme(legend.title = element_text(size = 18),
+        plot.title = element_text(size = 26),
+        plot.subtitle = element_text(size = 18),
+        axis.title = element_text(size = 18),
+        legend.text = element_text(size = 16)) +
+  guides(color = guide_legend(override.aes = list(size = 5)))  ## This gives us the big point in the legend
+g
+```
+
+Can you repeat the above exercise with another variable?
+
+**Question 9**.
+
+Finally, we would like to save the plot.  One way is to right click and select "Save Image."  The function `ggsave()` gives us a lot of control over how to save images.  If you happen to be making a bunch of plots, over a loop for instance, it will be useful to learn how `ggsave()` works.
+
+The function `ggsave()` will save the last plot (it must be a `ggobject`) you displayed, in this case what we stored in the object `g`.
+
+
+```{R, warning = FALSE, message = FALSE, eval = FALSE}
+g
+ggsave("strikeouts-vs-year.pdf", width = 8, height = 6)
+```
+
+What happens if you replace with `.pdf` with `.png`.  Open up both the pdf and the png.  Zoom in on the pdf.  Zoom in on the png.  Is there a difference?
+
+
+## Bonus exercises
+
+
+1. Instead of coloring the strikeouts vs. year by whether the team won the world series, color them by team ID.  (This will probably be a mess since there are so many teams).
+  
+2. Pick 8 teams and subset the MLB data to those teams.
+  
+  a. Plot Homeruns vs. Hits.
+  
+  b. Color the points by the team.
+  
+  c. Change the colors of the teams to actually match the teams' colors.
+
+  d. What can you conclude from your plot?  Point out at least three features.
+
+

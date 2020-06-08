@@ -1,22 +1,67 @@
 library(tidyverse)
+library(patchwork)
 
 nfl <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/eda_projects/nfl_teams_season_summary.csv")
 str(nfl)
 
 # Q1. Does good defense tend to win games?
-# Q2. Who is the GOAT in each division? / overall?
-# Q3. Which is better, passing or running with the ball?
 
-nfl %>%
-  ggplot(aes(x = wins, color = division)) +
-  geom_freqpoly()  +
+nfl_strat <- nfl %>%
+  mutate(matches = wins + losses,
+         win_loss_ratio = wins/losses,
+         run_def = ifelse(-1*run_def_total_epa >= run_off_total_epa, TRUE, FALSE),
+         pass_def = ifelse(-1*pass_def_total_epa >= pass_off_total_epa, TRUE, FALSE),
+         def_total_epa = run_def_total_epa + pass_def_total_epa, # overall "defensiveness"
+         off_total_epa = run_off_total_epa + pass_off_total_epa, # overall "offensiveness"
+         strategy = as.factor(ifelse(run_def & pass_def, "Pure Defense",
+                                     ifelse(!run_def & pass_def, "Def Pass/Off Run",
+                                            ifelse(run_def & !pass_def, "Off Pass/Def Run",
+                                                   ifelse(!run_def & !pass_def, "Pure Offense", "")
+                                            )
+                                     ))
+         ),
+         strategy = fct_relevel(strategy, c("Pure Defense", "Def Pass/Off Run", "Off Pass/Def Run", "Pure Offense"))
+  ) %>%
+  group_by(season, division) %>%
+  mutate(final_rank = as.factor(dense_rank(desc(win_loss_ratio)))) %>%
+  ungroup()
+
+#nfl_strat %>%
+  #ggplot(aes(final_rank, fill = strategy)) +
+  #geom_bar() +
+  #facet_wrap(vars(division)) +
+  #theme_bw()
+
+#nfl_strat %>%
+  #ggplot(aes(strategy, wins)) +
+  #geom_violin() +
+  #geom_jitter() +
+  #theme_bw()
+
+pass <- nfl_strat %>%
+  ggplot(aes(-1*pass_def_epa_per_att, pass_off_epa_per_att, z = wins)) +
+  stat_summary_hex(color = "black",
+                   fun = mean) +
+  scale_fill_gradient(low = "darkblue",
+                      high = "darkorange") +
+  labs(x = "-1 * Pass Defense EPA per Attempt",
+       y = "Pass Offense EPA per Attempt",
+       title = "Mean Wins by EPA") + 
   theme_bw() +
-  theme(legend.position = "bottom")
+  theme(legend.position = "none") +
+  coord_fixed()
 
+run <- nfl_strat %>% 
+  ggplot(aes(-1*run_def_epa_per_att, run_off_epa_per_att, z = wins)) +
+  stat_summary_hex(color = "black",
+                   fun = mean) +
+  scale_fill_gradient(low = "darkblue",
+                      high = "darkorange") +
+  labs(x = "-1 * Run Defense EPA per Attempt",
+       y = "Run Offense EPA per Attempt",
+       fill = "Mean Wins") +
+  theme_bw() +
+  coord_fixed()
 
-nfl %>%
-  ggplot(aes(x = wins, 
-             y = pass_off_epa_per_att)) +
-  annotate(geom = "text", x = 12, y = -0.2, label = paste("r =", cor(nfl$wins, nfl$pass_off_epa_per_att))) +
-  geom_point()
+pass + run + plot_layout(guides = "collect")
 

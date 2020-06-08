@@ -1,0 +1,143 @@
+---
+title: "Density Estimation Demo"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+giannis_shots <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/xy_examples/giannis_2019_shots.csv")
+head(giannis_shots)
+```
+
+```{r}
+giannis_shots %>% 
+  ggplot(aes(x = shot_distance)) +
+  geom_histogram(binwidth = 1,
+                 center = 0.5,
+                 closed = "left") + 
+  theme_bw()
+```
+
+Probability density function (PDF) is the derivative of the cumulative distribution function (CDF).
+
+Histograms approximate the PDF with bins, and points are equally likely within a bin. (probability of a realization occuring within a bin follows a uniform distribution)
+
+We want non-zero density between our observations, e.g. between 23 and 24 feet
+
+## Kernel Density Estimation (KDE)
+
+**Goal**: Estimate the PDF $f(x)$ for all possible values (assuming it is continuous / smooth)
+
+Kernel density estimate: $f\hat(x) = \frac{1}{n}\displaystyle\sum^{n}_{i=1}\frac{1}{h}K_h(x-x_i)$
+
+$n$: sample size, $x$: new point to esimate $f(x)$ (does NOT have to be in dataset!)
+
+$h$: bandwidth, analogous to histogram bin width, ensures $f\hat(x)$ integrates to 1
+
+$x_i$: ith observation in dataset
+
+$K_h(x-x_i)$ is the Kernel function, creates weight given distance of ith observation from new points
+
+as $|x - x_i| \rightarrow \infty$ then $K_h(x-x_i) \rightarrow 0$
+
+Generally use the Gaussian kernel (normal distribution PDF) with variance = $h$
+
+```{r}
+giannis_shots %>% 
+  ggplot(aes(x = shot_distance)) +
+  geom_density() +
+  geom_rug(alpha = 0.3) +
+  theme_bw()
+```
+
+Use Gaussian reference rule (rule of thumb), $1.06\sigma n^{-\frac{1}{5}}$ where $\sigma$ is the observed standard deviation. This is the default bandwidth in R.
+
+```{r}
+# adjust multiplies the default bandwidth 
+giannis_shots %>% 
+  ggplot(aes(x = shot_distance)) +
+  geom_density(adjust = 0.5) +
+  geom_rug(alpha = 0.3) + theme_bw()
+```
+
+Use density curves and ECDF together!
+
+```{r}
+library(patchwork)
+
+giannis_shot_dens <- giannis_shots %>% 
+  ggplot(aes(x = shot_distance, color = is_shot_made)) +
+  geom_density(adjust = 0.5) +
+  geom_rug(alpha = 0.3) +
+  theme_bw() +
+  labs(x = "Shot distance (in feet)",
+       y = "Density") +
+  theme(legend.position = "none")
+
+giannis_shot_ecdf <- giannis_shots %>% 
+  ggplot(aes(x = shot_distance, color = is_shot_made)) +
+  stat_ecdf() +
+  geom_rug(alpha = 0.3) +
+  theme_bw() +
+  labs(x = "Shot distance (in feet)",
+       y = "Proportion of Giannis' shot attempts")
+
+giannis_shot_dens / giannis_shot_ecdf + plot_layout(guides = "collect")
+# stack on top: giannis_shot_dens / giannis_shot_ecdf
+```
+
+```{r}
+library(ggridges)
+
+giannis_shots %>% 
+  ggplot(aes(x = shot_distance,
+             y = shot_type)) +
+  geom_density_ridges(rel_min_height = 0.01) +
+  theme_bw()
+```
+
+```{r}
+giannis_shots %>% 
+  mutate(shot_x = -shot_x / 10,
+         shot_y = shot_y / 10) %>% 
+  filter(shot_y <= 30) %>% 
+  ggplot(aes(x = shot_x, y = shot_y)) + 
+  geom_point(alpha = 0.3) +
+  geom_density_2d(adjust = 0.1) + 
+  theme_bw() +
+  coord_fixed()
+```
+
+```{r}
+giannis_shots %>% 
+  mutate(shot_x = -shot_x / 10,
+         shot_y = shot_y / 10) %>% 
+  filter(shot_y <= 30) %>% 
+  ggplot(aes(x = shot_x, y = shot_y)) + 
+  stat_density2d(h = 0.5, bins = 60,
+                 aes(fill = after_stat(level)),
+                 geom = "polygon") +
+  scale_fill_gradient(low = "darkblue",
+                      high = "darkorange") +
+  theme_bw() + 
+  theme(legend.position = "bottom") +
+  coord_fixed()
+```
+
+```{r}
+library(hexbin)
+
+giannis_shots %>% 
+  mutate(shot_x = -shot_x / 10,
+         shot_y = shot_y / 10) %>% 
+  filter(shot_y <= 30) %>% 
+  ggplot(aes(x = shot_x, y = shot_y, z = is_shot_made, group = -1)) + 
+  stat_summary_hex(binwidth = c(2, 2),
+                   color = "black",
+                   fun = mean) +
+  scale_fill_gradient(low = "darkblue",
+                      high = "darkorange") +
+  theme_bw() +
+  theme(legend.position = "bottom") + 
+  coord_fixed()
+```

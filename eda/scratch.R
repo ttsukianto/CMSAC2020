@@ -1,5 +1,6 @@
 library(tidyverse)
 library(patchwork)
+library(GGally)
 
 nfl <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/eda_projects/nfl_teams_season_summary.csv")
 str(nfl)
@@ -65,13 +66,30 @@ run <- nfl_strat %>%
 
 pass + run + plot_layout(guides = "collect")
 
+# Bivariate hierarchical clustering
+
+nfl_minimax <- protoclust(dist(dplyr::select(nfl_strat, pass_def_epa_per_att, pass_off_epa_per_att)))
+
+minimax_clust <- protocut(nfl_minimax, k = 4)
+
+table("Final Rank" = nfl_strat$final_rank,
+      "Clusters" = minimax_clust$cl)
+
+nfl_strat %>% 
+  mutate(clusters = as.factor(minimax_clust$cl)) %>% 
+  ggplot(aes(x = -1*pass_def_epa_per_att, y = pass_off_epa_per_att, color = clusters)) +
+  geom_point() +
+  ggthemes::scale_color_colorblind() +
+  theme_bw()
+
+# Multivariate hierarchical clustering
+
 nfl_multidim_clust <- protoclust(dist(dplyr::select(nfl_strat, pass_def_epa_per_att, pass_off_epa_per_att, run_def_epa_per_att, run_off_epa_per_att)))
 
 nfl_multidim_clusters <- protocut(nfl_multidim_clust, k = 4)
 table("Final Rank" = nfl_strat$final_rank,
       "Clusters" = nfl_multidim_clusters$cl)
 
-library(GGally)
 nfl_strat <- nfl_strat %>% 
   mutate(full_minimax_clusters = as.factor(nfl_multidim_clusters$cl))
 

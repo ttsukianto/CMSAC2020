@@ -1,0 +1,149 @@
+---
+title: "Clustering Demo"
+output: html_notebook
+---
+
+**Statistical learning** refers to a set of tools for modeling and understanding complex datasets.
+
+**Unsupervised learning**: We have $p$ variables from $n$ observations $X_1, ... X_n$, and for observation $i$: $X_{i1}, X_{i2}, ... , X_{in} \sim P$
+
+$P$: $p$-dimensional distribution that we might not know much about a priori.
+
+**unsupervised:** none of the variables are response variables (there are no labeled data).
+
+Think of unsupervised learning as an extension of EDA...
+
+## Clustering (Cluster Analysis)
+
+Clustering is a very broad set of techniques for finding subgroups, or clusters, in a dataset
+
+Observations within clusters are more similar to each other and observations in different clusters are more different from each other.
+
+Euclidean distance (distance formula) is commonly used to define dissimilarity between observations.
+
+Be careful...one variable many dominate others when comparing Euclidean distance because of different units. We can standardize to put the variables on the same scale, or we can leave the original units if we want to retain that information.
+
+$C_1, ..., C_k$ are sets containing indices of observations in each of the $K$ clusters.
+
+We want to minimize the within-cluster variation $W(C_k)$ for each cluster $C_k$ and solve:
+
+$$minimize\{\displaystyle\sum^K_{k=1}W(C_k)\}$$
+
+Can define $W$ using squared Euclidean distance.
+
+### K-means clustering
+
+Randomly assign a number, from $1$ to $K$, to each of the observations. These serve as initial cluster assignments for the observations.
+
+Iterate until the cluster assignments stop changing.
+
+For each of the $K$ clusters, compute the cluster centroid. The $k$the cluster centroid is the vector of the $p$ feature means for the observations in the $k$th cluster.
+
+Assign each observation to the closest cluster.
+
+```{r}
+library(tidyverse)
+
+nba_pos_stats <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/clustering/nba_2020_player_per_pos_stats.csv")
+head(nba_pos_stats)
+
+tot_players <- nba_pos_stats %>% 
+  filter(tm == "TOT")
+
+nba_player_stats <- nba_pos_stats %>% 
+  filter(!(player %in% tot_players$player)) %>% 
+  bind_rows(tot_players)
+
+nba_player_stats %>% 
+  ggplot(aes(x = mp)) +
+  stat_ecdf() +
+  theme_bw() +
+  geom_vline(xintercept = 250,
+             linetype = "dashed",
+             color = "darkred")
+
+nba_filtered_stats <- nba_player_stats %>% 
+  filter(mp >= 250)
+
+init_nba_kmeans <- kmeans(dplyr::select(nba_filtered_stats, x3pa, trb), 2, nstart = 30)
+
+init_nba_kmeans$cluster
+
+nba_filtered_stats %>% 
+  mutate(player_clusters = as.factor(init_nba_kmeans$cluster)) %>% 
+  ggplot(aes(x = x3pa, y = trb, color = player_clusters)) +
+  geom_point() +
+  ggthemes::scale_color_colorblind() +
+  theme_bw()
+
+```
+
+###Hierarchical clustering
+
+Begin with n observations and a measure (such as Euclidean distance) of all the pairwise dissimilarities. Treat each observation as its own cluster.
+
+For $i = n, n-1, ..., 2$, examine all pairwise inter-cluster dissimilarities among the $i$ clusters and identify the pair of clusters that are least dissimilar. Fuse thse two clusters. The dissimilarity is the height in the dendogram.
+
+Repeat for $i = n-1, ..., 2$ and so on until there is one big cluster remaining.
+
+```{r}
+nba_complete_hclust <- hclust(dist(dplyr::select(nba_filtered_stats, x3pa, trb)), method = "complete")
+```
+
+We need a definition of cluster linkage.
+
+**Complete**: Largest dissimilarity between individual points in two clusters.
+
+**Simple**: Smallest dissimilarity between individual points in two clusters.
+
+**Average**: Average dissimilarity between individual points in two clusters.
+
+**Centroid**: Compare centroid (vector of means) A and centroid B.
+
+
+```{r}
+hc_player_clusters <- cutree(nba_complete_hclust, k = 3)
+
+nba_filtered_stats %>% 
+  mutate(player_clusters = as.factor(hc_player_clusters)) %>% 
+  ggplot(aes(x = x3pa, y = trb, color = player_clusters)) +
+  geom_point() +
+  ggthemes::scale_color_colorblind() +
+  theme_bw()
+```
+
+**Minimax**: Identify the point whose farthest point is closest. 
+
+```{r}
+library(protoclust)
+
+nba_minimax <- protoclust(dist(dplyr::select(nba_filtered_stats, x3pa, trb)))
+
+plot(nba_minimax)
+
+minimax_player_clusters <- protocut(nba_minimax, k = 3)
+
+nba_filtered_stats %>% 
+  mutate(player_clusters = as.factor(minimax_player_clusters$cl)) %>% 
+  ggplot(aes(x = x3pa, y = trb, color = player_clusters)) +
+  geom_point() +
+  ggthemes::scale_color_colorblind() +
+  theme_bw()
+```
+
+```{r}
+nba_multidim_clust <- protoclust(dist(dplyr::select(nba_filtered_stats, x2ppercent, x3pa, ast, stl, trb)))
+
+plot(nba_multidim_clust)
+nba_multidim_clusters <- protocut(nba_multidim_clust, k = 5)
+table("Positions" = nba_filtered_stats$pos,
+      "Clusters" = nba_multidim_clusters$cl)
+```
+```{r}
+library(GGally)
+nba_filtered_stats <- nba_filtered_stats %>% 
+  mutate(full_minimax_clusters = as.factor(nba_multidim_clusters$cl))
+
+ggpairs(nba_filtered_stats, columns = c("x2ppercent", "x3pa", "ast", "stl", "trb"),
+        aes(color = full_minimax_clusters))
+```

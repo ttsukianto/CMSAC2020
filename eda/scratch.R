@@ -65,3 +65,15 @@ run <- nfl_strat %>%
 
 pass + run + plot_layout(guides = "collect")
 
+nfl_multidim_clust <- protoclust(dist(dplyr::select(nfl_strat, pass_def_epa_per_att, pass_off_epa_per_att, run_def_epa_per_att, run_off_epa_per_att)))
+
+nfl_multidim_clusters <- protocut(nfl_multidim_clust, k = 4)
+table("Final Rank" = nfl_strat$final_rank,
+      "Clusters" = nfl_multidim_clusters$cl)
+
+library(GGally)
+nfl_strat <- nfl_strat %>% 
+  mutate(full_minimax_clusters = as.factor(nfl_multidim_clusters$cl))
+
+ggpairs(nfl_strat, columns = c("pass_def_epa_per_att", "pass_off_epa_per_att", "run_def_epa_per_att", "run_off_epa_per_att"),
+        aes(color = full_minimax_clusters))

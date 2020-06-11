@@ -66,22 +66,6 @@ run <- nfl_strat %>%
 
 pass + run + plot_layout(guides = "collect")
 
-# Bivariate hierarchical clustering
-
-nfl_minimax <- protoclust(dist(dplyr::select(nfl_strat, pass_def_epa_per_att, pass_off_epa_per_att)))
-
-minimax_clust <- protocut(nfl_minimax, k = 4)
-
-table("Final Rank" = nfl_strat$final_rank,
-      "Clusters" = minimax_clust$cl)
-
-nfl_strat %>% 
-  mutate(clusters = as.factor(minimax_clust$cl)) %>% 
-  ggplot(aes(x = -1*pass_def_epa_per_att, y = pass_off_epa_per_att, color = clusters)) +
-  geom_point() +
-  ggthemes::scale_color_colorblind() +
-  theme_bw()
-
 # Multivariate hierarchical clustering
 
 nfl_multidim_clust <- protoclust(dist(dplyr::select(nfl_strat, pass_def_epa_per_att, pass_off_epa_per_att, run_def_epa_per_att, run_off_epa_per_att)))
@@ -95,3 +79,24 @@ nfl_strat <- nfl_strat %>%
 
 ggpairs(nfl_strat, columns = c("pass_def_epa_per_att", "pass_off_epa_per_att", "run_def_epa_per_att", "run_off_epa_per_att"),
         aes(color = full_minimax_clusters))
+
+
+large_div <- nfl %>% dplyr::mutate(conference = substr(division, 1, 3))
+
+large_div %>%
+  ggplot(aes(x = fct_reorder(as.factor(team), wins), y = wins, fill = conference)) +
+  geom_bar(stat = "identity") + 
+  theme_bw() +
+  #facet_wrap(~season, ncol = 3) +
+  labs(title = "Which is stronger: AFC vs. NFC? (200-2019)", 
+       subtitle = "Regular season wins during the 2019 season",
+       x = "Team",
+       y = "Total Wins") +
+  coord_flip() +
+  geom_vline(xintercept = 16.5, 
+             linetype = "dashed", 
+             color = "black")
+
+nfl_team_rename <- nfl %>% 
+  mutate(team = ifelse(team == "STL", "LA", team),
+         team = ifelse(team == "SD", "LAC", team))

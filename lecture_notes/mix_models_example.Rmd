@@ -1,0 +1,109 @@
+---
+title: "Gaussian Mixture Models"
+output: html_notebook
+---
+
+KDEs are computationally intensive because every data point is used in calculating each estimate.
+
+## Mixture models
+
+$f(x)=\displaystyle\sum^K_{k=1}\pi_kf_k(x)$
+
+$\pi_k$: mixing proportions (or weights)
+
+This is a data generating process.
+
+Pick a distribution among our $K$ options by introducing a new variable.
+
+$z \sim Multinomial(\pi_1, \pi_2, ..., \pi_k)$
+
+
+### Gaussian Mixture Models
+
+Assume a parametric mixture model, with parameters $\theta_k$ for the $k$th component.
+
+$f(x)=\displaystyle\sum^K_{k=1}\pi_kf_k(x;\theta_k)$
+
+We need to estimate each $\pi_1, ... , \pi_k$, $\mu_1, \mu_2, ... \mu_k$, $\sigma_1, \sigma_2, ... \sigma_k$
+
+To do this, we can compute the maximum likelihood estimates (MLEs) for $\mu$ and $\sigma$ assuming one distribution.
+
+The MLEs for the normal distribution are the sample mean and sample standard deviation.
+
+However, we don't know which component an observation belongs to!
+
+We can get the distribution of $z$ given the data.
+
+### Expectation-Maximization (EM) algorithm
+
+Alternate between:
+
+- Pretending to know the probability each observation belongs to each group, to estimate the parameters of the components
+
+- Pretending to know the parameters of the components, to estimate the probability each observation belongs to each group
+
+Start with initial guesses about the parameters.
+
+E-step: calculate $\hat z_{ik}$: expected membership of observation $i$ in cluster $k$
+
+M-step: update parameter estimates with weighted MLE using $\hat z_{ik}$
+
+$\hat z_{ik}$ is a soft membership of observation $i$ in cluster $k$.
+
+You can assign observation $i$ to a cluster with the largest $\hat z_{ik}$
+
+Measure cluster assignment uncertainty: $1 - max_k{\hat z_{ik}}$
+
+Parameters determine the type of clusters.
+
+In 1D, we have two options: equal and unequal variance
+
+### Multivariate GMM
+
+$f(x)=\displaystyle\sum^K_{k=1}\pi_kN(\bf{\mu_k}, \Sigma_k)$
+
+$\mu_k$: vector of means
+
+$\Sigma_k$: covariance matrix
+
+We can control the volume, shape, and orientation of the covariance.
+
+k-means has equal volume and spherical shape.
+
+### Bayesian information criterion (BIC)
+
+We can use a model selection procedure for determining which best characterizes the data.
+
+$BIC = 2 log -m\log n$
+
+m parameters and n observations
+
+Penalizaes large models with many clusters without constraints
+
+We can use BIC to choose the covariance constraints AND number of clusters $K$.
+
+```{r}
+library(tidyverse)
+library(mclust)
+
+nba_pos_stats <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/clustering/nba_2020_player_per_pos_stats.csv")
+head(nba_pos_stats)
+
+tot_players <- nba_pos_stats %>% 
+  filter(tm == "TOT")
+
+nba_player_stats <- nba_pos_stats %>% 
+  filter(!(player %in% tot_players$player)) %>% 
+  bind_rows(tot_players)
+
+nba_filtered_stats <- nba_player_stats %>% 
+  filter(mp >= 250)
+
+nba_mclust <- Mclust(dplyr::select(nba_filtered_stats, x2ppercent, x3pa, ast, stl, trb))
+
+summary(nba_mclust)
+
+plot(nba_mclust, what = "BIC", legendArgs = list(x = "bottomright", ncol = 5))
+
+plot(nba_mclust, what = "classification")
+```

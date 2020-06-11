@@ -1,0 +1,46 @@
+---
+title: "NFL Exploratory Data Analysis"
+author: Thea Sukianto, Fiona Dunn
+date: "June 12, 2020"
+output: pdf_document
+---
+
+```{r message = FALSE}
+library(tidyverse)
+library(patchwork)
+library(GGally)
+```
+## Data Background
+
+```{r}
+nfl <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/eda_projects/nfl_teams_season_summary.csv") %>% 
+  dplyr::mutate(win_loss_ratio = wins/losses,
+                conference = as.factor(substr(division, 1, 3)),
+                team = as.factor(team),
+                season = as.factor(season),
+                division = as.factor(division)) %>% 
+  dplyr::group_by(season, division) %>%
+  dplyr::mutate(final_rank = as.factor(dense_rank(desc(win_loss_ratio)))) %>%
+  dplyr::ungroup()
+
+head(nfl)
+```
+
+```{r}
+dim(nfl)
+```
+
+This dataset is composed of season summaries for each NFL team from 2009-2019 which were scraped using the `nflscrapR` package (originally formatted as a .csv). It is loaded into R as a `tibble` to make table viewing easier and for consistency in using `tidyverse` packages.
+
+There are a total of $352$ observations (rows) and $24$ variables (columns) from the original data. We added $3$ variables based on the original variables in order to communicate additional information.
+
+Each observation corresponds to a particular team, from a particular division, during a particular season. `team`, `division`, and `season` are the `factor` variables that represent this information. We also included the `conference` of each team.
+
+In addition, the total `points_scored`, `points_allowed`, `wins`, `losses`, and `ties` are `numeric` variables that represent outcomes.
+
+
+
+
+
+
+

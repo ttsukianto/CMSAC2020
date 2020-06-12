@@ -9,10 +9,12 @@ output: pdf_document
 library(tidyverse)
 library(patchwork)
 library(GGally)
+library(hexbin)
+library(protoclust)
 ```
 ## Data Background
 
-```{r}
+```{r message = FALSE}
 nfl <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/eda_projects/nfl_teams_season_summary.csv") %>% 
   dplyr::mutate(win_loss_ratio = wins/losses,
                 conference = as.factor(substr(division, 1, 3)),
@@ -38,9 +40,92 @@ Each observation corresponds to a particular team, from a particular division, d
 
 In addition, the total `points_scored`, `points_allowed`, `wins`, `losses`, and `ties` are `numeric` variables that represent outcomes.
 
+The remainder of the `numeric` variables show the performance of a team during that year's season. For example, `pass_off_total_yards_gained` is the team's total yards gained during a season while passing on offense, and `pass_off_total_epa` is the team's total expected point gain that season from offensive passing in reference to the average (0). A positive EPA is good when considering offense and a negative EPA is good when considering defense. Equivalent summaries exist for running, defense, and per attempt instead of a total.
+
+However, yards gained can have different levels of importance depending on when they occur during a game, so in the following exploratory data analysis we use EPA.
+
+## Is the saying "the best offense is a good defense" actually true? 
+
+```{r}
+# Statistical summary hex plot of -defensive EPA (pass) vs. offensive EPA (pass), colored by wins
+pass <- nfl %>%
+  ggplot(aes(-1*pass_def_epa_per_att, pass_off_epa_per_att, z = wins)) +
+  stat_summary_hex(color = "black",
+                   fun = mean) +
+  scale_fill_gradient(low = "darkblue",
+                      high = "darkorange") +
+  labs(x = "-1 * Pass Defense EPA per Attempt",
+       y = "Pass Offense EPA per Attempt",
+       title = "Mean Wins by EPA") + 
+  theme_bw() +
+  theme(legend.position = "none") +
+  coord_fixed()
+
+# Statistical summary hex plot of -defensive EPA (run) vs. offensive EPA (run), colored by wins
+run <- nfl %>% 
+  ggplot(aes(-1*run_def_epa_per_att, run_off_epa_per_att, z = wins)) +
+  stat_summary_hex(color = "black",
+                   fun = mean) +
+  scale_fill_gradient(low = "darkblue",
+                      high = "darkorange") +
+  labs(x = "-1 * Run Defense EPA per Attempt",
+       y = "Run Offense EPA per Attempt",
+       fill = "Mean Wins") +
+  theme_bw() +
+  coord_fixed()
+
+# Lay plots side-by-side using the 'patchwork' package
+pass + run + patchwork::plot_layout(guides = "collect")
+```
+
+In order to explore this question, we first have to quantify what "defensive strength" and "offensive strength" are. A convenient measure we already have in the data is EPA. Then, if 0 represents an average team, a team with a positive offensive EPA has "stronger offense" and a team with a negative offensive EPA has "weaker offense". The same holds for defense, but the scale of defensive EPA is reversed. If the defensive EPA is less than zero, then the team has "stronger defense" and if the defensive EPA is greater than zero, the team has "weaker defense".
+
+Therefore, a potential way to shed insight on the question of whether offense or defense is a better predictor of success is to plot defensive EPA against offensive EPA. In the above statistical summary hex plot, we negated defensive EPA for ease of interpretation (the bottom left corner corresponds to bad defense and bad offense while the top right corner is good defense and good offense). We colored on wins per season, where bright orange represents an average of 15 wins in a particular bin (hex) and dark purple represents an average of 0.
+
+In the hex plot for pass plays, there is a clear positive trend between negated defensive EPA and offensive EPA in terms of wins. That is, teams with bad defense and bad offense (dark purple) tend to win less games than teams with good defense and good offense (bright orange). The colors are symmetrically distributed along the diagonal line, so it appears that defense holds roughly equal importance with offense when consdering pass plays.
+
+In the hex plot for run plays, there appears to be no trend at all between negated defensive EPA and offensive EPA in terms of wins. There is a uniform scatter of colors and it is difficult to predict how many wins a team would have during a season based on run EPA.
+
+Based on these observations, we can conclude for this dataset that it is important to have both good offense and defense when passing, and that offensive and defensive strength are poor predictors of success when running. Furthermore, this could also imply that passing is more correlated with game outcome than running. 
+
+There is also the potential follow-up question of whether these results are constant across seasons. In esports, there exists a "meta" where the dominant playstyle of teams can change every few months. Does this exist in football?
+
+## Clustering
+
+```{r}
+nfl <- nfl %>% 
+  dplyr::mutate(neg_pass_def_epa_per_att = -1*pass_def_epa_per_att,
+                neg_run_def_epa_per_att = -1*run_def_epa_per_att)
+
+# Set up prototype clusters
+nfl_multidim_clust <- protoclust(dist(dplyr::select(nfl, neg_pass_def_epa_per_att, pass_off_epa_per_att, run_def_epa_per_att, run_off_epa_per_att))) 
+
+# Set number of clusters to 4
+nfl_multidim_clusters <- protocut(nfl_multidim_clust, k = 4)
+
+# Compare cluster assignments to final rank
+table("Final Rank" = nfl$final_rank,
+      "Clusters" = nfl_multidim_clusters$cl)
+```
+
+```{r}
+# Set dissimilarity criterion to minimax
+nfl <- nfl %>% 
+  mutate(full_minimax_clusters = as.factor(nfl_multidim_clusters$cl))
+
+# Plot matrix of scatterplots showing cluster assignments
+ggpairs(nfl, columns = c("pass_def_epa_per_att", "pass_off_epa_per_att", "run_def_epa_per_att", "run_off_epa_per_att"),
+        aes(color = full_minimax_clusters), title = "Grouping by EPA", columnLabels = c("-1*Pass Def EPA per Att", "Pass Off EPA per Att", "-1*Run Def EPA per Att", "Run Off EPA per Att"))
+```
 
 
+Furthermore, we wanted to know if there were inherent groupings based on strategy (negated defensive EPA vs. offensive EPA). In pursuit of this, we conducted multivariable hierarchical clustering with minimax dissimilarity criterion on `neg_pass_def_epa_per_att`, `pass_off_epa_per_att`, `neg_run_def_epa_per_att`, and `run_off_epa_per_att`.
 
+With $k = 4$, there appeared to be no relation between final rank and the cluster assignments, so the grouping found by the clustering seems to be different than season performance. Teams with final rank $1$ were mostly assigned to clusters $1$ or $2$ and teams with final rank $3$ to $2$ or $3$. However, teams with final rank $2$ were assigned across all 4 clusters and final rank $4$ was also assigned to $2$ or $3$. 
+
+In the matrix of scatterplots showing the cluster assignments, most variable combinations exhibit poor separation (difficult to separate which team belongs to which cluster), except for pass EPA. For pass EPA, we can see four quadrants in which there are teams with good defense and good offense, good defense and bad offense, bad defense and good offense, and bad defense and bad offense.
+
+This raises a question of whether we can best evaluate a team's performance solely on its passing performance and what other insights can be gained from grouping by passing performance.
 
 
 

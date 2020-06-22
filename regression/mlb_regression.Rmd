@@ -1,0 +1,40 @@
+---
+title: "MLB Regression Analysis"
+author: "Thea Sukianto, James Hyman"
+date: "6/19/2020"
+output: pdf_document
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(GGally)
+library(car)
+```
+
+## Exploratory Data Analysis
+
+```{r}
+baseball_batting <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/regression_projects/baseball_batting.csv") %>% 
+  dplyr::mutate(WPA_net = WPA_plus + WPA_minus)
+str(baseball_batting)
+```
+
+We add an additional column, `WPA_net`, as the sum of `WPA_plus` and `WPA_minus` to show the net change in win probability per player per season.
+
+```{r}
+baseball_batting %>% 
+  ggplot(aes(WPA_net)) +
+  geom_histogram() +
+  labs(x = "",
+       y = "")
+  theme_bw()
+```
+
+```{r}
+ggpairs(baseball_batting, columns = c("WPA_plus", "H", "HR", "R", "RBI", "AVG", "SLG"))
+```
+
+```{r}
+ggpairs(baseball_batting, columns = c("WPA_minus", "SO", "BB_K", "CS", "Strikes"))
+```

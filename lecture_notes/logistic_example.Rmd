@@ -1,0 +1,137 @@
+---
+title: "Logistic Regression Demo"
+output: html_notebook
+---
+
+## Logistic regression
+
+Assuming that we are dealing with two classes, the possible observed values for $Y$ are $0$ and $1$.
+
+$$Y|X \sim Binomial(n = 1, p = E(Y|X)) = Bernoulli(p = E(Y|X))$$
+
+To limit the regression between $[0, 1]$, use the logit function (log-odds ratio):
+
+$$logit(p(X)) = \log[\frac{p(X)}{1-p(X)}] = \log[\frac{E(Y|X)}{1-E(Y|X)}] = \beta_0 + \beta_1X_1...$$
+
+meaning that:
+
+$$p(X) = E(Y|X) = \frac{e^{\beta_0+\beta_1X_1...}}{1 + e^{\beta_0+\beta_1X_1...}}$$
+
+This means the predicted response varies non-linearly with the predictor variable values. One convention is to fall back upon the concept of odds.
+
+For example, pretend the predicted probability is 0.8 given a particular predictor variable value.
+
+If we were to repeatedly sample response values given that predictor variable value, we expect class 1 to appear 4 times as often as class 0.
+
+$$\frac{E(Y|X)}{1-E(Y|X)}=\frac{0.8}{1-0.8}=4=e^{\beta_0+\beta_1X}$$
+
+For every unit change is $X$, the odds change by a factor of $e^{\beta_1}$.
+
+Logistic regression involves numerical optimization to find the MLE (Use i.e. Newton's method, IRLS)
+
+Likelihood function: 
+
+$$\displaystyle\prod_{i=1}^np(X_i)^{Y_i}(1-p(X_i))^{1-Y_i}$$
+
+```{r}
+library(tidyverse)
+
+nfl_fg_attempts <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/glm_examples/nfl_fg_attempt_data.csv")
+
+nfl_fg_attempts
+```
+
+```{r}
+init_logit <- glm(is_fg_made ~ kick_distance, data = nfl_fg_attempts, family = "binomial")
+
+nfl_fg_attempts %>% 
+  mutate(pred_prob = init_logit$fitted.values) %>% 
+  ggplot(aes(x = kick_distance)) +
+  geom_line(aes(y = pred_prob), color = "blue") +
+  geom_point(aes(y = is_fg_made),
+             color = "darkorange",
+             alpha = 0.2) +
+  theme_bw()
+
+```
+
+```{r}
+summary(init_logit)
+```
+
+Deviance residuals represent the difference between the predicted and observed probabilities in terms of the likelihood - how far away are we from the perfectly overfit model?
+
+AIC: $2k - 2\log\mathcal L$
+
+```{r}
+# predicts on the link scale
+summary(predict(init_logit))
+
+# predicts on the probability scale
+summary(predict(init_logit, type = "response"))
+
+pred_fg_outcome <- ifelse(init_logit$fitted.values < .5, "miss", "make")
+
+table(pred_fg_outcome)
+
+table("Predictions" = pred_fg_outcome, "Observed" = nfl_fg_attempts$is_fg_made)
+
+# misclassification rate
+mean(ifelse(init_logit$fitted.values < .5, 0, 1) != nfl_fg_attempts$is_fg_made)
+
+# Brier score - MSE on probability scale
+mean((nfl_fg_attempts$is_fg_made - fitted(init_logit))^2)
+```
+
+```{r}
+# Calibration plot
+nfl_fg_attempts %>% 
+  mutate(pred_prob = fitted(init_logit),
+         bin_pred_prob = round(pred_prob / 0.05) * 0.05) %>% # put into bins with width 0.05
+  group_by(bin_pred_prob) %>% 
+  summarize(n_attempts = n(),
+            bin_actual_prob = mean(is_fg_made)) %>% 
+  ggplot(aes(x = bin_pred_prob, y = bin_actual_prob)) +
+  geom_point(aes(size = n_attempts)) +
+  geom_smooth(method = "loess", se = FALSE) +
+  geom_abline(slope = 1, intercept = 0,
+              linetype = "dashed", color = "red") +
+  coord_equal() +
+  scale_x_continuous(limits = c(0, 1)) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme_bw() + 
+  theme(legend.position = "bottom")
+```
+
+```{r}
+# holdout CV
+nfl_fg_loso_cv_preds <- 
+  map_dfr(unique(nfl_fg_attempts$pbp_season), # for every unique season
+          
+          function(season) { # do this function and stack the results as a df
+            
+            test_data <- nfl_fg_attempts %>% 
+            filter(pbp_season == season)
+
+            train_data <- nfl_fg_attempts %>% 
+            filter(pbp_season != season)
+
+            train_model <- glm(is_fg_made ~ kick_distance, data = train_data, family = "binomial")
+            tibble(test_pred_probs = predict(train_model, newdata = test_data, type = "response"), test_actual = test_data$is_fg_made, test_season = season)
+          })
+
+nfl_fg_loso_cv_preds %>% 
+  summarize(brier_score = mean((test_actual - test_pred_probs)^2))
+
+nfl_fg_loso_cv_preds %>% 
+  mutate(test_pred = ifelse(test_pred_probs <.5, 0, 1)) %>% 
+  group_by(test_season) %>% 
+  summarize(brier_score = mean((test_actual - test_pred_probs)^2),
+            mcr = mean(test_pred != test_actual)) %>% 
+  ggplot(aes(x = test_season, y = mcr)) +
+  geom_bar(stat = "identity", width = .1) +
+  geom_point(size = 5) +
+  theme_bw() +
+  scale_x_continuous(breaks = unique(nfl_fg_loso_cv_preds$test_season))
+
+```

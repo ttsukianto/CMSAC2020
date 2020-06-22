@@ -1,0 +1,124 @@
+---
+title: "Generalized Linear Models"
+output: html_notebook
+---
+
+## Probability distributions
+
+Distribution: A mathematical function $f(x|\theta)$ such that $x$ may take on continuous/discrete values over the domain (i.e. all possible inputs) and $\theta$ is a set of parameters governing the shape of the distribution. The shape of the distribution is conditional on the values of $\theta$.
+
+Axioms: $\forall x, f(x|\theta) \geq 0$, $\sum_xf(x|\theta) = 1$ (discrete), $\int_xf(x|\theta)=1$ (continuous)
+
+$f$ is used to denote the distribution for its probability density function (PDF, continuous), probability mass function (PMF, discrete)
+
+The normal distribution PDF is
+
+$$f(x|\mu, \sigma^2) = \frac{1}{\sigma\sqrt{2\pi}}e^{\frac{-1}{2}(\frac{x-\mu}{\sigma})^2}$$
+
+We write $X \sim N(\mu, \sigma^2)$
+
+```{r}
+library(tidyverse)
+
+tibble(x = c(-5, 5)) %>% 
+  ggplot(aes(x = x)) %>% 
+  stat_function(fun = dnorm,  # help(Distributions)
+                n = 101,
+                args = list(mean = 0, sd = 1)) +
+  stat_function(fun = dnorm,
+                args = list(mean = -2,
+                            sd = sqrt(3)),
+                color = "red") +
+  theme_bw()
+
+
+```
+
+The binomial distribution PMF is:
+
+$$f(x|n, p) = {n\choose x}p^x(1-p)^{n-x}$$
+This is a model for the probability of $x$ successes in $n$ independent trials, each with success probability of $p$.
+
+We write $X \sim Binomial(n, p)$
+
+```{r}
+# Binomial distribution
+
+tibble(x = 0:10) %>% 
+  mutate(binom1 = dbinom(x, size = 10, prob = 0.5),
+         binom2 = dbinom(x, size = 10, prob = 0.1)) %>% 
+  ggplot(aes(x = x)) +
+  geom_point(aes(y = binom1), color = "blue") +
+  geom_point(aes(y = binom2), color = "darkorange") +
+  theme_bw()
+```
+
+## Simple linear regression assumptions
+
+Linear regression and generalized variants make assumptions about how observed data are distributed around the true regression line, conditional on a value of $x$.
+
+For simple linear regression, our goal is to estimate $E[Y|x]$, assuming for every $x$:
+
+$$Y \sim N(\beta_0 + \beta_1x, \sigma^2)$$
+
+This is equivalent to stating that $Y = \beta_0 + \beta_1x+\epsilon$ where $\epsilon \sim N(0, \sigma^2)$
+
+## Maximum Likelihood Estimation
+
+In generalized regression, we assume a (family of) distribution(s) that govern observed response values $Y$, and estimate the parameters $\theta$ of that distribution.
+
+Estimation is done by maximizing the likelihood function (commonly the log):
+
+$$\mathcal L = \displaystyle\prod^n_{i=1}f(Y_i|\theta)$$
+
+The maximum is where the first derivative is zero.
+
+For linear regression, $\mathcal L$ can be maximized analytically:
+
+$$\hat\beta = (X^TX)^{-1}X^TY$$
+
+The $\hat\beta$ estimates that minimize the residual sum of squares (RSS) are the MLEs!
+
+Estimate for $\hat\sigma^2$ is the training data MSE: 
+
+$$\frac{1}{n}\displaystyle\sum_i^n(Y_i-(\hat\beta_0 + \hat\beta_1x))^2$$
+
+## Generalized linear models
+
+In typical linear regression, the distribution is normal and the domain of $Y|x$ is $(-\infty, \infty)$
+
+What if the domain is $[0, \infty)$ and the variables are discrete?
+
+### Poisson regression
+
+The Poisson PMF is:
+
+$$f(x|\lambda) = \frac{\lambda^xe^{-\lambda}}{x!}$$, where $x = 0, 1, 2...$
+
+The Poisson distribution represents the number of independent occurrences in an interval.
+
+### Link function
+
+In one predictor, the linear function is $\beta_0 + \beta_1x$
+
+However, for the Poisson case, we need to do a transformation so the predicted values are strictly non-negative.
+
+A common link function ($g$) is the log-link:
+
+$$g(\lambda|x) = \log(\lambda|x) = \beta_0 + \beta_1x$$
+
+So the assumptions of the Poisson GLM are:
+
+$Y|x \sim Poi(\lambda)$ 
+
+$\lambda|x = e^{\beta_0+\beta_1x}$
+
+We can use a numerical optimization to estimate the $\beta$s.
+
+### What family might be appropriate for...?
+
+$Y|x$ continuous, but bounded between 0 and 1? $\rightarrow$ Beta distribution
+
+$Y|x$ continuous, but bounded between 0 and $\infty$? $\rightarrow$ Gamma distribution
+
+$Y|x$ discrete, but can only take on the values 0 and 1? $\rightarrow$ Bernoulli distribution

@@ -1,0 +1,191 @@
+---
+title: "Clustering Lab"
+output:
+  pdf_document: default
+  html_document: default
+date: "6/15/2020"
+---
+
+## Introduction
+
+In this lab you will practice generating and interpreting clustering results, following the examples from the lectures on [K-means, hierarchical clustering](http://www.stat.cmu.edu/cmsac/sure/materials/lectures/slides/06-intro-clustering.html#1) and [Gaussian mixture models](http://www.stat.cmu.edu/cmsac/sure/materials/lectures/slides/07-gmms.html#1).
+
+### Data
+
+The dataset you will be using is all pitches thrown by Max Scherzer, Gerrit Cole, Jacob deGrom, Charlie Morton, and Walker Buehler in the 2019 season (including playoffs). 
+
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+mlb_pitch_data <- 
+  read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/clustering/sample_2019_mlb_pitches.csv")
+head(mlb_pitch_data)
+```
+
+Each row in the dataset is a single pitch, with the following six columns:
+
+- `pitch_type`: two letter abbreviation denoting the type of pitch that was thrown (see more info below),
+- `release_speed`: release speed of pitch in miles per hour (mph)
+- `release_spin_rate`: spin rate of pitch in revolutions per minute (rpm) as tracked by Statcast
+- `pfx_x`: horizontal movement in feet from the catcher's perspective,
+- `pfx_z`: vertical movement in feet from the catcher's perpsective
+- `pitcher`: name of pitcher throwing the pitch.
+
+The two letter pitch_type abbreviations represent the following types of pitches that can be summarized by two groups, (1) __fastballs__:
+
+- FF: four-seam fastball (most common pitch in baseball),
+- FT: two-seam fastball (more movement than FF),
+- FC: cutter (look up Mariano Rivera),
+- FS, SI, or SF: sinker / split-fingered,
+
+and (2) __offspeed__ pitches:
+
+- SL: slider,
+- CH: changeup,
+- CB or CU: curveball,
+- KC: knuckle-curve,
+- KN: knuckleball,
+- EP: eephus.
+
+_Note: these five pitchers do NOT all throw the same type of pitches, and do NOT throw all of the labeled pitch types above._
+
+## Exercises
+
+1. __EDA__ 
+
+Spend time exploring the dataset, create visualizations of the different continuous variables: `release_speed`, `release_spin_rate`, `pfx_x`, and `pfx_z`. Experiment with visualizations including all pitchers versus displaying each pitcher separately (__hint__: `facet_wrap()`). Do you observe differences between the different possible `pitch_type` abbreviations based on the measurements (__hint__: use `color = pitch_type`), and does it vary by pitcher? 
+
+
+```{r}
+mlb_pitch_data <- mlb_pitch_data %>% 
+  dplyr::mutate(pitch_category = ifelse(pitch_type %in% c("FF", "FT", "FC", "FS", "SI", "SF"), "Fastball", "Offspeed"))
+
+mlb_pitch_data %>% 
+  ggplot(aes(release_speed, release_spin_rate, color = pitch_type, shape = pitch_category)) +
+  geom_point() +
+  xlab("Release Speed") +
+  ylab("Release Spin Rate") + 
+  scale_color_discrete(name = "Pitch Type") + 
+  scale_shape_discrete(name = "Pitch Category") + 
+  ggtitle("Pitch Type Classification by Release Speed/Spin Rate") + 
+  theme_bw()
+```
+
+```{r}
+mlb_pitch_data %>% 
+  ggplot(aes(pfx_x, pfx_z, color = pitch_type, shape = pitch_category)) +
+  geom_point() +
+  xlab("Horizontal Movement") +
+  ylab("Vertical Movement") + 
+  scale_color_discrete(name = "Pitch Type") + 
+  scale_shape_discrete(name = "Pitch Category") + 
+  ggtitle("Per-Player Pitch Type Classification by Horizontal/Vertical Movement") + 
+  facet_wrap(vars(pitcher)) +
+  theme_bw()
+```
+
+```{r}
+pitch_xz <- mlb_pitch_data %>% 
+  ggplot(aes(pfx_x, pfx_z, color = pitch_type, shape = pitch_category), alpha = 0.5) +
+  geom_point() +
+  xlab("Horizontal Movement") +
+  ylab("Vertical Movement") + 
+  ggtitle("Pitch Type Classification by Horizontal/Vertical Movement") + 
+  scale_color_discrete(name = "Pitch Type") + 
+  scale_shape_discrete(name = "Pitch Category") + 
+  theme_bw()
+
+pitch_xz
+```
+
+
+__Which two continuous variables do you think perform best at detecting clusters / subgroups within the data based on your EDA? How many clusters do you think there are? Justify your answers based on your EDA.__ Do you think you will need to use any scaling of the variables?
+
+We think horizontal movement `pfx_x` and vertical movement `pfx_z` would perform best at detecting subgroups within the data. There could be many clusters due to the variety in pitch type. It seems that `pfx_x` and `pfx_z` are already on the same scale.
+
+2. __K-means and hierarchical clustering__
+
+Using your two selected variables and selected number of clusters $K$, generate clustering results using `kmeans()` and `hclust()` as in the lecture slides (feel free to try out the `protoclust` package as well for minimax linkage). Remember to set `nstart` within `kmeans` due to its random initialization. Experiment with different types of linkage functions for `hclust` (__hint__: view `help(hclust)` and see the `method` argument with descriptions of each in the Details section). Display your clustering results on a scatterplot with your two selected variables. 
+
+How do the results change when you cluster the pitches using all pitchers together versus clustering pitches thrown by each pitcher __separately__ (__hint__: use `filter()` to create separate datasets for each pitcher, and apply `kmeans` and `hclust` to each separately, but remember this may impact your number of clusters!). 
+
+Compare your clustering results to the provided `pitch_type` labels, how do they compare? __Remember, the provided pitch types are not necessarily correct as we saw in Mike Pane's presentation__. How do the results change when you use __only__ use the two variables you did NOT select? What happens when you use all four variables together?
+
+```{r}
+# hierarchical clustering
+library(patchwork)
+
+hclust_ <- hclust(dist(dplyr::select(mlb_pitch_data, pfx_x, pfx_z)), method = "average")
+
+hc_pitch_clusters <- cutree(hclust_, k = 8)
+
+hclust_xz <- mlb_pitch_data %>% 
+  mutate(pitch_clusters = as.factor(hc_pitch_clusters)) %>% 
+  ggplot(aes(x = pfx_x, y = pfx_z, color = pitch_clusters, shape = pitch_category)) +
+  geom_point() +
+  xlab("Horizontal Movement") +
+  ylab("Vertical Movement") +
+  ggthemes::scale_color_colorblind(name = "Classification") +
+  theme_bw()
+
+hclust_xz
+```
+
+```{r}
+table(mlb_pitch_data$pitch_type, hc_pitch_clusters)
+```
+
+```{r}
+clust_with_kmeans <- kmeans(dplyr::select(mlb_pitch_data, pfx_x, pfx_z), 8, nstart = 30)
+
+mlb_pitch_data %>%
+  mutate(pitch_cluster = as.factor(clust_with_kmeans$cluster)) %>%
+  ggplot(aes(x = pfx_x, y = pfx_z, color = pitch_cluster, shape = pitch_category)) +
+  geom_point() + 
+  theme_bw() +
+  xlab("Horizontal Movement") +
+  ylab("Vertical Movement") +
+  scale_color_discrete("Pitch cluster") +
+  scale_shape_discrete("Pitch Category")
+```
+
+```{r}
+table(mlb_pitch_data$pitch_type, clust_with_kmeans$cluster)
+```
+
+
+3. __Model-based clustering__ 
+
+Next use the `mclust` package and `Mclust()` function to generate the clustering results with Gaussian mixture models following the lecture example. Start with your originally selected two variables, what model (covariance constraint, e.g. VVV) is selected along with how many clusters based on the BIC? View the hard-assignment clustering results for this selection (__hint__: `mclust_results$classification` but replace `mclust_results` with whatever you assigned the results to), and how do they compare with the known pitch type labels. What happens when you use all four variables? Again, how do the results change when you cluster the pitches using all pitchers together versus clustering pitches thrown by each pitcher __separately__. Which do you think is more appropriate?
+
+View the distribution of cluster membership probabilities (follow the lecture example). What do the distributions look like?  View the uncertainty in each cluster (__hint__: `mclust_results$uncertainty`) as in the lecture example. Then view the uncertainty by the actual `pitch_type` label. Are there certain pitch types that display higher uncertainty values? How does this compare across the different pitchers?
+
+```{r}
+library(mclust)
+
+mlb_mclust <- Mclust(dplyr::select(mlb_pitch_data, pfx_x, pfx_z))
+
+summary(mlb_mclust)
+
+plot(mlb_mclust, what = "BIC", legendArgs = list(x = "bottomright", ncol = 5))
+
+plot(mlb_mclust, what = "classification")
+
+table(mlb_pitch_data$pitch_type, mlb_mclust$classification)
+
+mlb_pitch_data %>% 
+  dplyr::mutate(classification = mlb_mclust$classification,
+                uncertainty = mlb_mclust$uncertainty) %>% 
+  group_by(pitch_type, classification) %>%
+  dplyr::mutate(mean_uncertainty = mean(uncertainty)) %>% 
+  ungroup() %>% 
+  group_by(classification) %>% 
+  arrange(desc(mean_uncertainty)) %>%
+  ggplot(aes(x = pitch_type, y = mean_uncertainty)) +
+  labs(y = "Mean Uncertainty",
+       x = "Pitch Type") + 
+  geom_point() +
+  coord_flip() +
+  facet_wrap(vars(classification))
+```
+
+

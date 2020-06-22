@@ -1,0 +1,187 @@
+---
+title: "Supervised Learning Demo"
+output: html_notebook
+---
+
+**Goal:** Uncover associations between a set of predictor (a.k.a. independent / explanatory) variables / features / covariates and a single response (dependent) variable.
+
+**Examples:** Linear regression, generalized linear models (GLMs), generalized additive models (GAMs), decision trees, support vector machines, neural networks
+
+**Main types:** Regression - estimate average value of response given values for predictors, Classification - determine the most likely class 
+
+## Which method should I use in my analysis?
+
+Let $Y$ be the response variable, and $X$ be the predictors, then the learned model will take the form $\hat Y = \hat f(X)$.
+
+Inference - care about the details of $\hat f(X)$
+
+Prediction - don't care about the details
+
+Active area of research on using more black-box models for statistical inference
+
+### Model flexibility vs. interpretability
+
+There is a tradeoff between a model's flexibility (how "curvy it is") and its interpretability.
+
+Parametric models - Less flexible because we write down an explicit mathematical form of $f(X)$ before observing the data, i.e. linear regression - not as vulnerable to overfitting.
+
+Nonparametric models - $f(X)$ is estimated from the data, i.e. kernel regression - more vulnerable to overfitting (not generalizable).
+
+If the goal is prediction, the model can be arbitrarily flexible as it needs to be.
+
+### Model assessment and selection
+
+**Model assessment** - evaluating how well a learned model performs, via a single-number metric
+
+A loss / objective / cost function is a metric that represents the quality of fit of a model.
+
+For regression, we typically use mean squared error (MSE)
+
+$$MSE = \frac{1}{n}\displaystyle\sum_i^n(Y_i-\hat f(X_i))^2$$
+
+Quadratic loss: Squared differences between model predictions $\hat f(X)$ and observed data $Y$
+
+Classification metrics: Misclassification rate (MCR), area under curve (AUC)
+
+**Model selection** - choosing from a suite of learned models
+
+Picking the best covariance constraints (e.g. VVV) or number of clusters with BIC
+
+Picking the best regression model based on MSE, or best classifcation model based on MCR.
+
+For every model, use the same train-test split.
+
+An assessment metric is a random variable, i.e. if you choose different data to be in your training set, the metric will be different.
+
+For regression, a metric like MSE is unit-dependent (depends on data context)
+
+### So how do we deal with flexibility?
+
+**Goal:** We want to learn a statistical model that provides a good estimate of $f(X)$ without overfitting.
+
+Two common approaches: 
+
+Hold-out cross validation - split data into two groups, train and test
+
+k-fold cross validation - each observation is placed in the test data exactly once, do above k times
+
+### Bias-variance tradeoff
+
+**Bias**: Distance of estimated y-value from the truth
+
+**Variance**: Dispersion of estimated y-values
+
+The true MSE can be decomposed: 
+
+$$MSE = (Bias)^2 + Variance$$
+
+## Linear Regression
+
+### Problem setup
+
+We have a collection of $p$ variables for each of $n$ objects $X_1, ..., X_n$ and for observation $i$,
+
+$$X_{i,1}, ..., X_{1,p} \sim P$$
+$P$ is a $p$-dimensional distribution that we might not know much about $a priori$.
+
+For each observation, the response is $Y_i \sim Q$ such that $Q$ is a univariate distribution.
+
+In linear regression, we assume that $Y$ is related to the variables $X$ via the model 
+
+$$Y = \beta_0 + \beta_1X_1 + ... + \beta_pX_p + \epsilon$$
+such that $\epsilon$ represents the scatter of data around the regression line and is distributed according to the multivariate normal.
+
+### Why use it?
+
+Inflexible, but **interpretable**.
+
+Best Linear Unbiased Estimator (BLUE), assuming $X$ is fixed:
+
+$$E(\hat\beta|X=x)=\beta$$
+
+It is a fast model to learn.
+
+The $\beta$s can be computed via an exact formula, as opposed to slower numerical optimization.
+
+**Ordinary Least Squares (OLS)** estimator: $\hat\beta=(X^TX)^{-1}X^TY$ (division of covariances)
+
+Minimizes the Residual Sum of Squares (RSS): $RSS(\beta)=\displaystyle\sum_i^n(Y_i-\displaystyle\sum_j^p\hat\beta_jX_{ij})^2$ such that $\beta$ is a vector of parameters.
+
+### Caveats
+
+It estimates a conditional mean: $E(Y|X_1, ..., X_p)$
+
+If the $X$s are measured with uncertainty, then the estimates of the $\beta$s become biased.
+
+If the true value of a coefficient $\beta$ is 0, then the p-value is sampled from a Uniform(0,1) distribution - there is a 5% chance that you'll conclude there's a significant association between x and y even when there is none.
+
+As the sample size $n$ gets large, standard error goes to zero, and all predictors are eventually deemed significant.
+
+It may be useful to transform so that they are distributed more normally (less critical for predictors and more critical for response variable)
+
+Outliers may adversely affect your regression estimates. In a linear regression setting, outliers may be identified via the "Cook's distance". We offer no general heuristic regarding how to deal with outliers, other than you should scrupulously document how you deal with them!
+
+Beware collinearity! Collinearity is when one predictor variable is linearly associated with another. Collinearity is not necessarily harmful outside a linear regression setting, but must be dealt with in linear regression analyses. The general process is to perform the linear regression fit, compute the "variance inflation factor" `car::vif()`, remove a variable if its VIF > 5, and repeat the fitting process until no more variables are removed.
+
+### Do I really need to split my data?
+
+If your entire analysis workflow involves fitting one linear regression model to your data, there is no need to split your data into training and test datasets. Just learn the model, and interpret it.
+
+However, if you intend to learn multiple models, do the train-test split.
+
+```{r}
+library(tidyverse)
+
+x <- 1:10
+
+set.seed(303)
+y <- x + rnorm(10, mean = 0, sd = 0.5)
+fake_data <- tibble(x = x, y = y)
+
+# fit linear model
+init_lm <-  lm(y ~ x)
+other_lm <- lm(y ~ x, data = fake_data)
+
+summary(init_lm)
+
+init_lm$residuals
+init_lm$fitted.values
+
+train_preds <- predict(init_lm) # equivalent to fitted.values
+
+predict(init_lm, newdata = tibble(x = c(1.5, 3.3, 8.8, 25)))
+
+fake_data %>% 
+  mutate(preds = train_preds) %>% 
+  ggplot(aes(x)) +
+  geom_point(aes(y = y)) +
+  geom_point(aes(y = preds),
+             color = "red", size = 2) +
+  #geom_line(aes(y = preds),
+            #linetype = "dashed",
+            #color = "red") +
+  geom_abline(slope = init_lm$coefficents[2],
+              intercept = init_lm$coefficients[1],
+              color = "red", linetype = "dashed") + 
+  theme_bw()
+
+fake_data %>% 
+  ggplot(aes(x, y)) +
+  geom_point() + 
+  stat_smooth(method = "lm") +
+  theme_bw()
+
+# r-squared
+# look at adjusted r-squared if considering multiple models
+var(predict(init_lm)) / var(y)
+```
+
+### Model diagnostics
+
+MSE is unit-dependent - you cannot use its value alone to determine the quality of the underlying model
+
+Useful diagnostic is to plot observed response vs. predicted response (perfect relationship is along the diagonal line)
+
+Residual plot - residuals should have zero mean (no pattern)
+
+QQ plot (CDF transformation) - Standardized residuals should be normally distributed with variance 1 (normality may be checked using qqnorm())

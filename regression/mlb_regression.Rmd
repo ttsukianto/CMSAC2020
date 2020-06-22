@@ -10,31 +10,65 @@ library(tidyverse)
 library(patchwork)
 library(GGally)
 library(car)
+library(ggcorrplot)
 ```
 
 ## Exploratory Data Analysis
 
-```{r}
+```{r message = FALSE}
 baseball_batting <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/regression_projects/baseball_batting.csv") %>% 
-  dplyr::mutate(WPA_net = WPA_plus + WPA_minus)
+  dplyr::rename(Index = X1) %>% 
+  dplyr::mutate(WPA_net = WPA_plus + WPA_minus,
+                Name = as.factor(Name),
+                Team = as.factor(Team),
+                playerid = as.factor(playerid),
+                Season = as.factor(Season))
+
 str(baseball_batting)
 ```
 
-We add an additional column, `WPA_net`, as the sum of `WPA_plus` and `WPA_minus` to show the net change in win probability per player per season.
+Each row of `baseball_batting` represents season MLB batting statistics for an individual player between 2000-2019. There are a total of 1,429 observations and 39 variables. 
+
+Of these 39 variables, four are factors that represent a player's `Name`, `Team`, `playerid`, and `Season`. There are missing values in `Team` that may signify player trading.
+
+The remaining variables are numeric and represent various season-level batting statistics. These can be separated into two categories, "in-game" statistics and "calculated" statistics.
+
+For example, one of the statistics in the "calculated" category is `WPA` (win probability added). We add an additional column, `WPA_net`, as the sum of `WPA_plus` and `WPA_minus` to show the net change in win probability per player per season.
+
+
+### Exploring WPA
 
 ```{r}
 baseball_batting %>% 
   ggplot(aes(WPA_net)) +
   geom_histogram() +
-  labs(x = "",
-       y = "")
+  labs(x = "Net Win Probability Added (%)",
+       y = "Count",
+       title = "Distribution of MLB Net Win Probability Per Player, 2000-2019")
   theme_bw()
 ```
 
+The distribution of net win probability added is unimodal and roughly symmetric (centered around 0), with a slight skew to the right. This indicates that the average player has a balance between positive and negative win probability added, but there are a few all-stars with a net win probability added above 5.
+
+
+#### Potential Contributors to Positive Win Probability Added
+
+
 ```{r}
-ggpairs(baseball_batting, columns = c("WPA_plus", "H", "HR", "R", "RBI", "AVG", "SLG"))
+# View correlation matrix
+
+bb_pos_vars <- baseball_batting %>% 
+  dplyr::select(WPA_plus, H, HR, R, RBI, AVG, BB, BB_K, SLG, OBP)
+
+ggcorrplot(round(cor(bb_pos_vars), 2), lab = TRUE, type = "lower")
+
 ```
 
 ```{r}
-ggpairs(baseball_batting, columns = c("WPA_minus", "SO", "BB_K", "CS", "Strikes"))
+ggpairs(baseball_batting, columns = c("WPA_plus", "H", "R", "RBI", "SLG"))
+```
+
+
+```{r}
+ggpairs(baseball_batting, columns = c("WPA_minus", "SO", "SB", "CS", "Strikes"))
 ```

@@ -22,7 +22,8 @@ baseball_batting <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/
                 Name = as.factor(Name),
                 Team = as.factor(Team),
                 playerid = as.factor(playerid),
-                Season = as.factor(Season))
+                Season = as.factor(Season),
+                strike_percent = Strikes/Pitches)
 
 str(baseball_batting)
 ```
@@ -39,36 +40,138 @@ For example, one of the statistics in the "calculated" category is `WPA` (win pr
 ### Exploring WPA
 
 ```{r}
+# View the overall distribution of Net WPA
 baseball_batting %>% 
   ggplot(aes(WPA_net)) +
   geom_histogram() +
   labs(x = "Net Win Probability Added (%)",
        y = "Count",
-       title = "Distribution of MLB Net Win Probability Per Player, 2000-2019")
+       title = "Distribution of MLB Net Win Probability Per Player",
+       subtitle = "Most players balanced between positive and negative WPA") +
   theme_bw()
 ```
 
-The distribution of net win probability added is unimodal and roughly symmetric (centered around 0), with a slight skew to the right. This indicates that the average player has a balance between positive and negative win probability added, but there are a few all-stars with a net win probability added above 5.
+The distribution of net win probability added is unimodal and roughly symmetric (centered around 0), with a slight skew to the right. This indicates that the average player has a balance between positive and negative win probability added, but there are a few all-stars with a net win probability added above 5. It appears that net win probability would be a good candidate for the response variable.
 
 
-#### Potential Contributors to Positive Win Probability Added
+#### Potential Contributors to Net Win Probability Added
+
+```{r}
+bb_net_vars <- baseball_batting %>% 
+  dplyr::select(WPA_net, H, HR, R, RBI, AVG, BB, SLG, OBP, SO, SB, CS, strike_percent) %>% 
+  dplyr::rename(`Net WPA` = WPA_net,
+                `Strike %` = strike_percent)
+
+ggcorrplot(round(cor(bb_net_vars), 2), type = "lower", lab = TRUE, lab_size = 3,
+           title = "Selected Batting Statistics vs. Net WPA Correlation Matrix") +
+  labs(subtitle = "SLG and OBP have strongest linear relationship with Net WPA")
+```
+
+Based on the correlation matrix above, we make a conservative decision to choose variables $-.6 < r < 6$ as to avoid collinearity. Therefore, when defining linear models, (RBI, HR), (AVG, H), (SLG, HR), (RBI, SLG), (R, SLG), (SLG, OBP), (BB, OBP), (AVG, OBP), (Strike %, BB), (Strike %, OBP), (H, R) will not be put in the same model. We leave SO, SB, and CS out of potential models since the correlation values are so low.
+
+```{r}
+# View scatterplots for "in-game" statistics
+ggpairs(baseball_batting, columns = c("WPA_net", "H", "HR", "R", "RBI", "BB"), mapping = aes(alpha = 0.3), columnLabels = c("Net WPA", "H", "HR", "R", "RBI", "BB")) + labs(title = "Relationships Between Selected In-Game Statistics and Net WPA", subtitle = "R and RBI have strongest linear relationship with Net WPA")
+```
 
 
 ```{r}
-# View correlation matrix
+# Plot "calculated" statistics
 
-bb_pos_vars <- baseball_batting %>% 
-  dplyr::select(WPA_plus, H, HR, R, RBI, AVG, BB, BB_K, SLG, OBP)
+ggpairs(baseball_batting, columns = c("WPA_net", "AVG", "SLG", "OBP", "strike_percent"), mapping = aes(alpha = 0.3), columnLabels = c("Net WPA", "AVG", "SLG", "OBP", "Strike %")) + labs(title = "Relationships Between Selected Aggregate Statistics and Net WPA", subtitle = "SLG and OBP have strongest linear relationship with Net WPA")
+```
 
-ggcorrplot(round(cor(bb_pos_vars), 2), lab = TRUE, type = "lower")
+## Variable Selection and Model Selection
 
+```{r}
+# Modify cross-validation code from lecture to do leave-one-season-out cross validation
+get_cv_preds <- function(model_formula, data = baseball_batting) {
+  # generate holdout predictions for every row based season
+  purrr::map_dfr(unique(data$Season), 
+          function(holdout) {
+            # Separate test and training data:
+            test_data <- data %>%
+              filter(Season == holdout)
+            train_data <- data %>%
+              filter(Season != holdout)
+            # Train model:
+            reg_model <- lm(as.formula(model_formula), data = train_data)
+            # Return tibble of holdout results:
+            tibble(test_preds = predict(reg_model, newdata = test_data),
+                   test_actual = test_data$WPA_net,
+                   Season = holdout) 
+          })
+}
+```
+
+
+```{r}
+# Select variables for potential models based on EDA
+
+# Models with "in-game" statistics
+h_hr_bb <- get_cv_preds("WPA_net ~ H + HR + BB")
+h_rbi_bb <- get_cv_preds("WPA_net ~ H + RBI + BB")
+r_hr_bb <- get_cv_preds("WPA_net ~ R + HR + BB")
+r_rbi_bb <- get_cv_preds("WPA_net ~ R + RBI + BB") 
+
+# Models with "calculated" statistics
+avg_slg_strikes <- get_cv_preds("WPA_net ~ AVG + SLG + strike_percent")
+
+# Combination - 3 variables
+h_hr_obp <- get_cv_preds("WPA_net ~ H + HR + OBP")
+h_hr_strikes <- get_cv_preds("WPA_net ~ H + HR + strike_percent")
+h_rbi_obp <- get_cv_preds("WPA_net ~ H + RBI + OBP + strike_percent")
+h_rbi_strikes <- get_cv_preds("WPA_net ~ H + HR + strike_percent")
+h_bb_slg <- get_cv_preds("WPA_net ~ H + BB + SLG")
+r_rbi_obp <- get_cv_preds("WPA_net ~ R + RBI + OBP")
+rbi_bb_avg <- get_cv_preds("WPA_net ~ RBI + BB + AVG")
+rbi_bb_strikes <- get_cv_preds("WPA_net ~ RBI + BB + strike_percent")
+
+# Combination models - 4 variables
+r_rbi_avg_strikes <- get_cv_preds("WPA_net ~ R + RBI + AVG + strike_percent")
+r_hr_avg_strikes <- get_cv_preds("WPA_net ~ R + RBI + AVG + strike_percent")
+```
+
+
+```{r}
+bind_rows(mutate(h_hr_bb, type = "H + HR + BB"),
+          mutate(h_rbi_bb, type = "H + RBI + BB"),
+          mutate(r_hr_bb, type = "R + HR + BB"),
+          mutate(r_rbi_bb, type = "R + RBI + BB"),
+          mutate(avg_slg_strikes, type = "AVG + SLG + Strike %"),
+          mutate(h_hr_obp, type = "H + HR + OBP"),
+          mutate(h_hr_strikes, type = "H + HR + Strike %"),
+          mutate(h_rbi_obp, type = "H + RBI + OBP"),
+          mutate(h_rbi_strikes, type = "H + RBI + Strike %"),
+          mutate(h_bb_slg, type = "H + BB + SLG"),
+          mutate(r_rbi_obp, type = "R + RBI + OBP"),
+          mutate(rbi_bb_avg, type = "RBI + BB + AVG"),
+          mutate(rbi_bb_strikes, type = "RBI + BB + Strike %"),
+          mutate(r_rbi_avg_strikes, type = "R + RBI + AVG + Strike %"),
+          mutate(r_hr_avg_strikes, type = "R + HR + AVG + Strike %")) %>%
+  group_by(type) %>%
+  summarize(rmse = sqrt(mean((test_actual - test_preds)^2))) %>%
+  mutate(type = fct_reorder(type, rmse)) %>%
+  ggplot(aes(x = type, y = rmse)) +
+  labs(x = "Model",
+       y = "Root Mean Squared Error (RMSE)",
+       title = "Leave-one-season-out Cross Validation Model Performance",
+       subtitle = "Models considering both RBI and OBP performed best") + 
+  coord_flip() + 
+  geom_point() + 
+  theme_bw()
+```
+
+## Model Evaluation
+
+```{r}
+# Create a linear model from the best CV RMSE and view diagnostic plots
+r_rbi_obp_lm <- lm("WPA_net ~ R + RBI + OBP", data = baseball_batting)
+plot(r_rbi_obp_lm)
 ```
 
 ```{r}
-ggpairs(baseball_batting, columns = c("WPA_plus", "H", "R", "RBI", "SLG"))
+# View summary of best model
+summary(r_rbi_obp_lm)
 ```
-
-
-```{r}
-ggpairs(baseball_batting, columns = c("WPA_minus", "SO", "SB", "CS", "Strikes"))
 ```

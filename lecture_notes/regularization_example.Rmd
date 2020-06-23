@@ -1,0 +1,104 @@
+---
+title: "Regularization Demo"
+output: html_notebook
+---
+
+## Ridge regression
+
+Introduce a penalty to the residual sum of squares (RSS), particularly the beta. Intuitively, there is a "budget" for the coefficients.
+
+Define $\lambda \geq 0$ as the shrinkage penalty:
+
+$$RSS + \lambda\displaystyle\sum_j^p\beta_j^2$$
+
+As $\lambda$ increases, flexibility of models decreases (The coefficient shrinks toward zero, but never actually reaches it). Use cross-validation to tune $\lambda$. 
+
+## Lasso regression
+
+Minimize:
+
+$$RSS + \lambda\displaystyle\sum_j^p|\beta_j|$$
+
+such that $|\beta_j|$ is the $\ell_1$ norm.
+
+As $\lambda$ increases, flexibility of models decreases (can actually reach zero because of the $\ell_1$ norm). 
+
+Can handle the $p > n$ case (more variables than observations).
+
+## Elastic net regression
+
+$$RSS + \lambda[(1-\alpha)||\beta||_2^2/2 + \alpha||\beta||_1]$$
+
+$||\beta||_1$ is the $\ell_1$ norm: $\sum_j^p|\beta_j|$
+
+$||\beta||_1$ is the $\ell_2$ norm: $\sqrt{\sum_j^p\beta^2_j}$
+
+$\alpha$ controls mixing between lasso and ridge.
+
+## Caveats
+
+For all three types of penalized regression above, the data should be standardized. 
+
+## Example
+
+```{r}
+library(ISLR)
+library(tidyverse)
+library(glmnet)
+
+data("Hitters")
+
+Hitters <- as_tibble(Hitters) %>% 
+  filter(!is.na(Salary))
+
+model_x <- model.matrix(Salary ~., Hitters)[, -1] # Select all variables except for Salary
+
+model_y <- Hitters$Salary
+
+init_reg_fit <- lm(Salary ~., Hitters)
+
+fit_ridge_cv <- cv.glmnet(model_x, model_y, alpha = 0)
+plot(fit_ridge_cv)
+
+coef(fit_ridge_cv)
+coef(fit_ridge_cv, fit_ridge_cv$lambda.min)
+
+fit_lasso_cv <- cv.glmnet(model_x, model_y, alpha = 1)
+plot(fit_lasso_cv)
+
+coef(fit_lasso_cv)
+
+set.seed(2020)
+fold_id <- sample(rep(1:10, length.out = nrow(model_x)))
+table(fold_id)
+
+cv_en_25 <- cv.glmnet(model_x, model_y,
+                      foldid = fold_id,
+                      alpha = 0.25)
+
+cv_en_45 <- cv.glmnet(model_x, model_y,
+                      foldid = fold_id,
+                      alpha = 0.45)
+
+cv_en_65 <- cv.glmnet(model_x, model_y,
+                      foldid = fold_id,
+                      alpha = 0.65)
+
+cv_en_85 <- cv.glmnet(model_x, model_y,
+                      foldid = fold_id,
+                      alpha = 0.85)
+
+cv_ridge <- cv.glmnet(model_x, model_y,
+                      foldid = fold_id,
+                      alpha = 0)
+
+cv_lasso <- cv.glmnet(model_x, model_y,
+                      foldid = fold_id,
+                      alpha = 1)
+
+which.min(c(min(cv_en_25$cvm), min(cv_en_45$cvm),
+            min(cv_en_65$cvm), min(cv_en_65$cvm),
+            min(cv_ridge$cvm), min(cv_lasso$cvm)))
+
+cv_en_25$cvm[which(cv_en_25$lambda == cv_en_25$lambda.lse)]
+```

@@ -1,0 +1,129 @@
+---
+title: "Variable Selection Demo"
+output: html_notebook
+---
+
+Eliminating uniformative predictors can help with both model accuracy and interpretability.
+
+## Covariance and correlation
+
+**Covariance**: A measure of the linear dependence between two variables. "Uncorrelated" is NOT "independent"!
+
+**Correlation**: Normalized covariance between -1 and 1 such that -1 is a perfect negative relationship and 1 is a perfect positive relationship.
+
+```{r}
+library(tidyverse)
+library(ggcorrplot)
+library(ggdendro)
+library(dendextend)
+library(GGally)
+
+nfl_teams_data <- read_csv("http://www.stat.cmu.edu/cmsac/sure/materials/data/eda_projects/nfl_teams_season_summary.csv")
+
+nfl_teams_data <- nfl_teams_data %>% 
+  mutate(score_diff = points_scored - points_allowed)
+
+nfl_teams_data %>% 
+  ggplot(aes(x = score_diff)) +
+  geom_histogram(color = "black",
+                 fill = "darkblue",
+                 alpha = 0.3) +
+  theme_bw()
+
+
+nfl_model_data <- nfl_teams_data %>% 
+  dplyr::select(score_diff,
+                pass_off_epa_per_att,
+                run_off_epa_per_att,
+                pass_def_epa_per_att, 
+                run_def_epa_per_att,
+                pass_off_yards_gained_per_att,
+                run_off_yards_gained_per_att,
+                pass_def_yards_allowed_per_att,
+                run_def_yards_allowed_per_att)
+
+nfl_cor_matrix <- cor(nfl_model_data)
+
+ggcorrplot(nfl_cor_matrix)
+
+round_cor_matrix <- round(nfl_cor_matrix, 2)
+ggcorrplot(round_cor_matrix,
+           type = "lower",
+           hc.order = TRUE,
+           lab = TRUE)
+
+nfl_ex_vars <- dplyr::select(nfl_model_data, -score_diff)
+
+exp_cor_matrix <- cor(nfl_ex_vars)
+
+cor_dist_matrix <- 1 - abs(exp_cor_matrix)
+cor_dist_matrix <- as.dist(cor_dist_matrix)
+
+nfl_exp_hc <- hclust(cor_dist_matrix,
+                     method - complete)
+
+plot(nfl_exp_hc)
+
+ggdendrogram(nfl_exp_hc,
+             rotate = TRUE,
+             size = 2)
+
+ggpairs(nfl_model_data,
+        columns = c("score_diff", "pass_off_epa_per_att",
+                    "run_off_epa_per_att", "pass_def_epa_per_att",
+                    "run_def_epa_per_att"))
+
+```
+
+```{r}
+set.seed(2020)
+
+nfl_model_data <- nfl_model_data %>% 
+  mutate(test_fold = sample(rep(1:5, length.out = n())))
+
+get_cv_preds <- function(model_formula, data = nfl_model_data) {
+  map_dfr(unique(data$test_fold),
+          function(holdout) {
+            test_data <- data %>% 
+              filter(test_fold == holdout)
+            train_data <- data %>% 
+              filter(test_fold != holdout)
+            
+            reg_model <- lm(as.formula(model_formula),
+                            data = train_data)
+            
+            tibble(test_preds = predict(reg_model, newdata = test_data),
+                   test_actual = test_data$score_diff,
+                   test_fold = holdout)
+          })
+}
+
+pass_only_cv_preds <- get_cv_preds("score_diff ~ pass_off_epa_per_att + pass_def_epa_per_att")
+
+all_lm <- lm(score_diff ~ pass_off_epa_per_att + pass_def_epa_per_att,
+             data = nfl_model_data)
+
+summary(all_lm)
+
+ggcoef(all_lm,
+       exclude_intercept = TRUE,
+       vline = TRUE,
+       vline_color = "red") +
+  theme_bw()
+```
+
+## Methods
+
+Justify which predictors / variables used in modeling based on extensive EDA and model assessment based on test set predictions. 
+
+There is not a single "right answer" - variable selection is an open problem in statistics research.
+
+### Best subset selection
+
+Start with the null model $\mathcal M_0$ (intercept-only) that has no predictors (just predicts the sample mean for each observation).
+
+Fit all $p \choose k$ models with $k$ predictors, then pick the best (some criteria e.g. MSE)
+
+**Extremely slow in high dimensions!**
+
+
